@@ -35,6 +35,7 @@
     roRpm: $('ro-rpm'), roSpeed: $('ro-speed'), roThrottle: $('ro-throttle'),
     roSpeedUnit: $('ro-speed-unit'), speedUnitLabel: $('speed-unit-label'),
     slider: $('speed-slider'), manualControls: $('manual-controls'),
+    pedalControls: $('pedal-controls'),
     gpsStatus: $('gps-status'), gpsMessage: $('gps-message'),
     settingsPanel: $('settings-panel'),
     engineToggle: $('btn-engine-toggle'),
@@ -108,16 +109,69 @@
 
   function setSource(source) {
     settings.source = source;
+    el.manualControls.classList.toggle('hidden', source !== 'manual');
+    el.pedalControls.classList.toggle('hidden', source !== 'pedals');
+    el.gpsStatus.classList.toggle('hidden', source !== 'gps');
     if (source === 'gps') {
-      el.manualControls.classList.add('hidden');
-      el.gpsStatus.classList.remove('hidden');
       startGps();
     } else {
       stopGps();
-      el.manualControls.classList.remove('hidden');
-      el.gpsStatus.classList.add('hidden');
-      engine.setTargetSpeed(Number(el.slider.value));
+      if (source === 'manual') {
+        engine.setTargetSpeed(Number(el.slider.value));
+      } else {
+        pedalSpeed = engine.speed; // take over from wherever the car is
+      }
     }
+  }
+
+  // ---------- Pedals ----------
+  // Press amount comes from *where* the pedal is touched: near the top is
+  // a light press, near the bottom is flooring it. Each pedal tracks its
+  // own pointer, so gas and brake work simultaneously (multi-touch).
+  const pedals = { gas: 0, brake: 0 };
+  let pedalSpeed = 0; // km/h integrated from pedal inputs
+
+  function setupPedal(elPedal, key) {
+    const apply = (e) => {
+      const rect = elPedal.getBoundingClientRect();
+      const frac = (e.clientY - rect.top) / rect.height;
+      pedals[key] = Math.max(0.1, Math.min(1, frac));
+      elPedal.style.setProperty('--press', pedals[key].toFixed(2));
+      elPedal.classList.add('pressed');
+    };
+    const release = () => {
+      pedals[key] = 0;
+      elPedal.style.setProperty('--press', '0');
+      elPedal.classList.remove('pressed');
+    };
+    elPedal.addEventListener('pointerdown', (e) => {
+      elPedal.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      apply(e);
+    });
+    elPedal.addEventListener('pointermove', (e) => {
+      if (elPedal.hasPointerCapture(e.pointerId) && pedals[key] > 0) apply(e);
+    });
+    elPedal.addEventListener('pointerup', release);
+    elPedal.addEventListener('pointercancel', release);
+  }
+  setupPedal($('pedal-gas'), 'gas');
+  setupPedal($('pedal-brake'), 'brake');
+
+  /**
+   * Pedal-mode vehicle physics (km/h per second): full gas accelerates
+   * hard (fading near top speed), brake decelerates strongly, and with
+   * no pedals the car coasts down against drag — so holding a speed
+   * needs a bit of gas, like a real car.
+   */
+  function updatePedalPhysics(dt) {
+    const max = settings.maxSpeed;
+    const gasAccel = pedals.gas * 26 * (1 - 0.68 * (pedalSpeed / max));
+    const brakeDecel = pedals.brake * 55;
+    const drag = pedalSpeed > 0 ? 1.2 + 2.4 * (pedalSpeed / max) : 0;
+    pedalSpeed += (gasAccel - brakeDecel - drag) * dt;
+    pedalSpeed = Math.max(0, Math.min(pedalSpeed, max));
+    engine.setTargetSpeed(pedalSpeed);
   }
 
   function startGps() {
@@ -286,6 +340,7 @@
     const dt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
 
+    if (settings.source === 'pedals') updatePedalPhysics(dt);
     engine.update(dt);
 
     if (engineOn) {

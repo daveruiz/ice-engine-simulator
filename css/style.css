@@ -225,6 +225,54 @@ html, body {
 }
 .quick:active { background: var(--panel-2); }
 
+/* Pedals: press amount = vertical touch position (low = hard press) */
+#pedal-controls {
+  display: flex;
+  gap: 14px;
+  height: clamp(130px, 24vh, 220px);
+  padding: 4px 2vw;
+}
+.pedal {
+  position: relative;
+  flex: 1;
+  border-radius: 18px;
+  border: 2px solid var(--line);
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 14px, rgba(255,255,255,0.04) 14px 16px),
+    linear-gradient(180deg, var(--panel-2), var(--panel));
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none; /* keep touches on the pedal, no scrolling */
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pedal.gas { flex: 0.8; }
+.pedal-fill {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: calc(var(--press, 0) * 100%);
+  transition: height 60ms linear;
+  pointer-events: none;
+}
+.pedal.gas .pedal-fill {
+  background: linear-gradient(180deg, rgba(69,224,124,0.15), rgba(69,224,124,0.55));
+}
+.pedal.brake .pedal-fill {
+  background: linear-gradient(180deg, rgba(255,45,58,0.15), rgba(255,45,58,0.55));
+}
+.pedal.pressed { border-color: var(--dim); }
+.pedal-label {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(0.9rem, 3vw, 1.3rem);
+  letter-spacing: 0.35em;
+  color: var(--text);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+
 #gps-status {
   display: flex;
   align-items: center;

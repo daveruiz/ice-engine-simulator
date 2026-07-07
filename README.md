@@ -37,9 +37,18 @@ user gesture before audio can play).
 
 ## How it works
 
-- **Input**: target speed, from the slider (manual mode) or
-  `navigator.geolocation.watchPosition` (GPS mode — uses `coords.speed` when
-  available, falls back to haversine distance between fixes).
+- **Input**: target speed, from the slider (manual mode), touch pedals
+  (pedal mode), or `navigator.geolocation.watchPosition` (GPS mode — uses
+  `coords.speed` when available, falls back to haversine distance between
+  fixes).
+- **Pedal mode**: on-screen gas and brake pedals where the press amount
+  comes from *where* you touch — near the top is a light press, near the
+  bottom is flooring it — and sliding your finger modulates it live. Both
+  pedals track independent touches (left-foot braking works). A small
+  vehicle physics model integrates speed from the pedals: full gas
+  accelerates hard (fading near top speed), no pedals coasts down against
+  drag (so holding a speed needs a bit of throttle, like a real car), and
+  the brake decelerates strongly.
 - **Drivetrain model** (`js/engine.js`): geometric gear spacing computed from
   *number of gears*, *max speed* and *max RPM*. An automatic shift logic with
   shift-up/shift-down RPM thresholds, hysteresis, and a torque-cut shift time.
@@ -72,7 +81,7 @@ user gesture before audio can play).
 
 | Setting | Range |
 | --- | --- |
-| Speed source | Manual slider / GPS |
+| Speed source | Manual slider / Pedals / GPS |
 | Units | km/h / mph |
 | Max RPM | 4,000 – 12,000 |
 | Idle RPM | 500 – 1,500 |
