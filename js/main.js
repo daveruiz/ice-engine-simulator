@@ -290,7 +290,7 @@
 
     if (engineOn) {
       sound.update(engine.rpm, engine.throttle, settings.maxRpm,
-        settings.cylinders, engine.shifting);
+        settings.cylinders, engine.shifting, engine.shiftDir);
     }
 
     // Gauges

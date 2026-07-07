@@ -36,6 +36,19 @@ user gesture before audio can play).
   RPM follows speed through the current gear ratio, clamped at idle. Engine
   load (throttle) is estimated from acceleration and drives the sound
   character.
+- **Driver behavior model**: shifting reacts to *how* you drive, not just
+  speed:
+  - A driving-style estimate (rises fast under hard acceleration, cools down
+    slowly) slides the shift-up point between an early "economy" RPM for
+    relaxed driving and the configured sporty shift point when pushed —
+    and sporty shifts are quicker.
+  - **Kickdown**: strong acceleration demand below the power band drops one
+    or more gears first (like flooring an automatic), with an inhibit window
+    after upshifts so the box never hunts at full throttle.
+  - **Braking**: under hard braking the gear is held (no shifting mid-stop);
+    only as the car comes down below ~10 km/h do the gears drop through
+    quickly so it's back in 1st when it halts. Downshifts get a rev-match
+    throttle blip in the sound; upshifts get a torque cut.
 - **Sound** (`js/sound.js`): fully synthesized placeholder (v1). Firing
   frequency `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
   oscillators through waveshaper distortion and a throttle-tracking lowpass,

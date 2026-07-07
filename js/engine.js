@@ -55,6 +55,9 @@ class EngineSim {
     this.accel = 0;          // km/h per second (smoothed)
     this.shiftTimer = 0;     // >0 while a shift is in progress
     this.shiftDir = 0;       // +1 up, -1 down
+    this.aggressiveness = 0; // 0 relaxed .. 1 sporty (driver style estimate)
+    this.braking = false;    // true under hard deceleration
+    this.kickdownInhibit = 0; // no kickdown right after an upshift (no hunting)
   }
 
   /** RPM the engine would turn at `speed` in gear index `g` (0-based). */
@@ -91,6 +94,21 @@ class EngineSim {
     const instAccel = (this.speed - prevSpeed) / dt;
     this.accel += (instAccel - this.accel) * Math.min(1, dt / 0.25);
 
+    // --- driver style estimate ---
+    // Hard acceleration (and hard braking) read as sporty driving. The
+    // estimate rises quickly when pushed and cools down slowly, so after
+    // a burst of hard acceleration the box keeps revving out for a while
+    // before settling back into relaxed early upshifts.
+    const accelDemand = Math.min(1, Math.max(0, this.accel / 16));
+    const brakeDemand = Math.min(1, Math.max(0, -this.accel / 18));
+    const styleSignal = Math.min(1, accelDemand + brakeDemand * 0.6);
+    const styleTau = styleSignal > this.aggressiveness ? 0.5 : 7.0;
+    this.aggressiveness +=
+      (styleSignal - this.aggressiveness) * Math.min(1, dt / styleTau);
+
+    // Hard braking: driver is on the brake pedal, not shifting.
+    this.braking = this.accel < -5;
+
     // --- throttle / load estimate ---
     // Cruise needs a little throttle (~ speed dependent), accelerating
     // needs a lot, decelerating means closed throttle (engine braking).
@@ -104,7 +122,8 @@ class EngineSim {
     load = Math.max(0, Math.min(1, load));
     this.throttle += (load - this.throttle) * Math.min(1, dt / 0.12);
 
-    // --- gear selection ---
+    // --- gear selection (mimics driver / automatic gearbox behavior) ---
+    this.kickdownInhibit = Math.max(0, this.kickdownInhibit - dt);
     if (this.shiftTimer > 0) {
       this.shiftTimer -= dt;
     } else {
@@ -112,14 +131,40 @@ class EngineSim {
       const rpmNow = this.rpmInGear(this.speed, g);
       const accelerating = this.accel > 1.5;
 
-      if (this.gear < cfg.gears && rpmNow >= cfg.shiftUpRpm && accelerating) {
+      // Shift-up point slides with driving style: relaxed driving upshifts
+      // early at an "economy" rpm, hard acceleration revs out toward the
+      // configured (sporty) shift point. Instantaneous demand counts too,
+      // so flooring it raises the shift point immediately instead of
+      // waiting for the style estimate to catch up.
+      const styleNow = Math.max(this.aggressiveness, accelDemand);
+      const econUp = Math.min(
+        cfg.idleRpm + 0.28 * (cfg.maxRpm - cfg.idleRpm), cfg.shiftUpRpm);
+      const effShiftUp = econUp + (cfg.shiftUpRpm - econUp) * styleNow;
+
+      if (this.braking) {
+        // Mid-braking a driver holds the gear (clutch/converter takes it).
+        // Only as the car comes down to a stop do the gears drop through
+        // quickly so we're back in 1st when it halts.
+        if (this.gear > 1 && this.speed < 10) {
+          this._shift(-1, 0.12);
+        }
+      } else if (this.gear < cfg.gears && rpmNow >= effShiftUp && accelerating) {
         this._shift(+1);
       } else if (this.gear < cfg.gears && rpmNow >= cfg.maxRpm - 40) {
         this._shift(+1); // bounced off the limiter while cruising up
+      } else if (
+        // Kickdown: strong demand while below the power band — drop a gear
+        // (repeats next frames if more than one gear is needed). Inhibited
+        // right after an upshift so a box at full throttle doesn't hunt.
+        this.gear > 1 && accelDemand > 0.55 && this.kickdownInhibit <= 0 &&
+        rpmNow < cfg.shiftUpRpm * 0.72 &&
+        this.rpmInGear(this.speed, g - 1) < cfg.shiftUpRpm * 0.95
+      ) {
+        this._shift(-1, 0.2);
       } else if (this.gear > 1 && rpmNow <= cfg.shiftDownRpm) {
-        // Don't downshift into the limiter
+        // Cruise-down: don't downshift into the limiter
         const lower = this.rpmInGear(this.speed, g - 1);
-        if (lower < cfg.shiftUpRpm) this._shift(-1);
+        if (lower < effShiftUp) this._shift(-1);
       }
     }
 
@@ -138,10 +183,14 @@ class EngineSim {
     }
   }
 
-  _shift(dir) {
+  _shift(dir, duration) {
     this.gear += dir;
     this.shiftDir = dir;
-    this.shiftTimer = this.cfg.shiftTime;
+    if (dir > 0) this.kickdownInhibit = 2.5;
+    // Sporty driving means faster shifts; explicit duration overrides.
+    this.shiftTimer = duration !== undefined
+      ? duration
+      : this.cfg.shiftTime * (1 - 0.4 * this.aggressiveness);
   }
 
   /** True while the gearbox is mid-shift (torque cut → sound dips). */

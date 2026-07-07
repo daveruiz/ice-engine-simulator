@@ -143,9 +143,10 @@ class EngineSound {
    * @param {number} throttle   0..1 engine load
    * @param {number} maxRpm
    * @param {number} cylinders
-   * @param {boolean} shifting  torque cut during a gear change
+   * @param {boolean} shifting  gear change in progress
+   * @param {number} shiftDir   +1 upshift (torque cut), -1 downshift (blip)
    */
-  update(rpm, throttle, maxRpm, cylinders, shifting) {
+  update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir) {
     if (!this.running || !this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
@@ -154,8 +155,12 @@ class EngineSound {
     const firing = (rpm / 60) * (cylinders / 2);
     const rpmNorm = Math.min(1, rpm / maxRpm);
 
-    // Torque cut while shifting: throttle momentarily closed.
-    const load = shifting ? throttle * 0.15 : throttle;
+    // Upshift: torque cut (throttle momentarily closed).
+    // Downshift: rev-match blip (a stab of throttle to raise the revs).
+    let load = throttle;
+    if (shifting) {
+      load = shiftDir < 0 ? Math.max(throttle, 0.55) : throttle * 0.15;
+    }
 
     for (const { osc, ratio } of this.oscs) {
       osc.frequency.setTargetAtTime(firing * ratio, t, S);
