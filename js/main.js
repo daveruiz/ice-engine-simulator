@@ -112,6 +112,8 @@
     el.manualControls.classList.toggle('hidden', source !== 'manual');
     el.pedalControls.classList.toggle('hidden', source !== 'pedals');
     el.gpsStatus.classList.toggle('hidden', source !== 'gps');
+    // Control area height changes with the source; re-fit the gauges
+    requestAnimationFrame(onResize);
     if (source === 'gps') {
       startGps();
     } else {

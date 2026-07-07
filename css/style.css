@@ -401,10 +401,18 @@ html, body {
 }
 .hint { color: var(--dim); font-size: 0.8rem; line-height: 1.5; margin-top: 20px; }
 
+/* Controls and readouts must never be squeezed off-screen by the
+   gauges — the dashboard is the flexible region, everything below it
+   keeps its size. */
+#readouts, #controls, #bottom-bar { flex-shrink: 0; }
+#dashboard { overflow: hidden; }
+
 /* Landscape phones / Tesla screen: everything already flexes.
-   Portrait phones: stack gauges tighter. */
+   Portrait phones: stack gauges tighter, capped by viewport height so
+   the pedals/slider always fit below without scrolling. */
 @media (orientation: portrait) {
   #dashboard { flex-wrap: wrap; gap: 0; align-content: center; }
-  .gauge-wrap { flex: 1 1 45%; max-width: 48vw; }
+  .gauge-wrap { flex: 1 1 45%; max-width: min(48vw, 30vh); }
   #center-stack { order: 3; flex: 1 1 100%; flex-direction: row; justify-content: center; }
+  #pedal-controls { height: clamp(120px, 22vh, 200px); }
 }
