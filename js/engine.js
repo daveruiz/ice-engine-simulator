@@ -148,7 +148,16 @@ class EngineSim {
         if (this.gear > 1 && this.speed < 10) {
           this._shift(-1, 0.12);
         }
-      } else if (this.gear < cfg.gears && rpmNow >= effShiftUp && accelerating) {
+      } else if (this.gear < cfg.gears && rpmNow >= effShiftUp &&
+        (accelerating ||
+          // Relaxation upshift: after a hard pull settles into steady
+          // cruise, the decaying style estimate lowers effShiftUp until
+          // it crosses below the current rpm — then shift up to bring the
+          // revs down, like a driver easing off. Not while decelerating,
+          // and never into a gear that would lug below the downshift point.
+          (this.accel > -1.5 &&
+            this.rpmInGear(this.speed, g + 1) >= cfg.shiftDownRpm * 1.15))
+      ) {
         this._shift(+1);
       } else if (this.gear < cfg.gears && rpmNow >= cfg.maxRpm - 40) {
         this._shift(+1); // bounced off the limiter while cruising up
