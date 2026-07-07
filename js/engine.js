@@ -27,6 +27,10 @@ class EngineSim {
       firstGearFrac: 0.16, // fraction of maxSpeed reachable in 1st gear
     }, config);
     this._computeGearing();
+    // Reconfiguring mid-drive: the current gear must exist in the new box
+    if (this.gear !== undefined && this.gear > this.cfg.gears) {
+      this.gear = this.cfg.gears;
+    }
   }
 
   /**
