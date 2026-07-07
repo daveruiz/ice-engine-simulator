@@ -8,7 +8,17 @@ then synthesizes the engine sound in real time with the Web Audio API.
 No build step, no dependencies: plain HTML/CSS/JS. Works on mobile browsers
 and in the Tesla in-car browser (any Chromium-based browser).
 
-## Running it
+## Live app
+
+**https://daveruiz.github.io/ice-engine-simulator/**
+
+Every push to `main` deploys automatically to GitHub Pages via
+[`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml).
+Since Pages serves over HTTPS, GPS speed input works there — open the link
+on your phone or in the car's browser, allow location access, and switch
+the speed source to GPS in ⚙ Settings.
+
+## Running it locally
 
 Serve the folder over HTTP(S) — any static server works:
 
@@ -22,8 +32,8 @@ Then open the URL in the browser and tap **START ENGINE** (browsers require a
 user gesture before audio can play).
 
 > GPS speed input requires **HTTPS** (or `localhost`) and location permission.
-> For in-car use, host it somewhere with HTTPS — e.g. GitHub Pages — and open
-> it in the car's browser.
+> For in-car use, open the [GitHub Pages deployment](https://daveruiz.github.io/ice-engine-simulator/)
+> in the car's browser.
 
 ## How it works
 
