@@ -186,11 +186,20 @@ class EngineSim {
         cfg.idleRpm + 0.28 * (cfg.maxRpm - cfg.idleRpm), cfg.shiftUpRpm);
       const effShiftUp = econUp + (cfg.shiftUpRpm - econUp) * styleNow;
 
+      // 1st gear is for launching from a stop, not for rolling downshifts.
+      // Coming down through 2nd, a driver holds 2nd and either crawls to a
+      // stop or gets back on the throttle — dropping to 1st only when nearly
+      // stopped or the engine is lugging near idle. (Kickdown below is the
+      // exception: hard demand can still grab 1st to accelerate.)
+      const enteringFirst = this.gear === 2;
+      const canEnterFirst = this.speed < 6 || rpmNow <= cfg.idleRpm * 1.05;
+
       if (this.braking) {
         // Mid-braking a driver holds the gear (clutch/converter takes it).
         // Only as the car comes down to a stop do the gears drop through
-        // quickly so we're back in 1st when it halts.
-        if (this.gear > 1 && this.speed < 10) {
+        // quickly — but still hold 2nd until nearly stopped.
+        if (this.gear > 1 && this.speed < 10 &&
+            (!enteringFirst || canEnterFirst)) {
           this._shift(-1, 0.12);
         }
       } else if (this.gear < cfg.gears && rpmNow >= effShiftUp &&
@@ -216,9 +225,12 @@ class EngineSim {
       ) {
         this._shift(-1, 0.2);
       } else if (this.gear > 1 && rpmNow <= cfg.shiftDownRpm) {
-        // Cruise-down: don't downshift into the limiter
+        // Cruise-down: don't downshift into the limiter, and hold 2nd
+        // rather than dropping to 1st while still rolling.
         const lower = this.rpmInGear(this.speed, g - 1);
-        if (lower < effShiftUp) this._shift(-1);
+        if (lower < effShiftUp && (!enteringFirst || canEnterFirst)) {
+          this._shift(-1);
+        }
       }
     }
 
