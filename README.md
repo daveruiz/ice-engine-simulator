@@ -68,11 +68,32 @@ user gesture before audio can play).
     only as the car comes down below ~10 km/h do the gears drop through
     quickly so it's back in 1st when it halts. Downshifts get a rev-match
     throttle blip in the sound; upshifts get a torque cut.
-- **Sound** — two interchangeable engines (Settings → Sound):
+- **Sound** — three interchangeable engines (Settings → Sound):
   - **Synthesized** (`js/sound.js`, always available): firing frequency
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
     oscillators through waveshaper distortion and a throttle-tracking
     lowpass, plus band-passed noise for intake/exhaust breath.
+  - **Physical model** (`js/physical.js` + `js/physical-worklet.js`):
+    physically informed synthesis after Baldan et al., *"Physically
+    informed car engine sound synthesis for virtual and augmented
+    environments"* (IEEE SIVE 2015). An AudioWorklet simulates the
+    actual sound-producing parts of the engine, sample by sample: each
+    cylinder fires a combustion pressure pulse at its crank angle into
+    per-bank exhaust header **waveguides** (a cross-plane V8 sends an
+    uneven pulse train down each bank — that's the burble), through a
+    main exhaust pipe waveguide with a lossy open-end reflection and an
+    absorption muffler; intake-stroke air noise excites an intake tract
+    waveguide; firing impacts ring two resonant engine-block modes plus
+    camshaft-rate chain rattle; an optional turbocharger spools with
+    exhaust energy (whine, boost hiss, blow-off on lift); and on
+    overrun, unburnt mixture ignites in the exhaust — pops emerge from
+    the same pipe model rather than being played back. **Every physical
+    parameter is tweakable live in [`tuner.html`](tuner.html)** (⚙
+    Settings → Physical Engine Tuner): pipe lengths, muffler cutoff,
+    firing pattern, cylinder count, turbo, pops… Presets can be
+    exported/imported as JSON; the tuned set is stored in
+    `localStorage` and used by the simulator. Defaults model a
+    cross-plane V8.
   - **Sample packs** (`js/samples.js`): an engine library registered in
     the editable [`sounds/engines.js`](sounds/engines.js) — one folder
     per engine, each configured by a commented
@@ -104,6 +125,6 @@ Settings persist in `localStorage`.
 
 ## Roadmap
 
-- Overrun pops/burbles and turbo/supercharger layers
+- More physical-model presets (inline-4 turbo, flat-plane V8, diesel…)
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available

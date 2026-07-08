@@ -425,6 +425,98 @@ html, body {
 }
 .hint { color: var(--dim); font-size: 0.8rem; line-height: 1.5; margin-top: 20px; }
 
+/* ---------- Engine tuner page (tuner.html) ---------- */
+/* The tuner is a normal scrolling document, unlike the app screen
+   (tuner.html also resets overflow on <html> with an inline style) */
+body.tuner-page {
+  overflow: auto;
+  height: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#tuner {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 3vh 5vw 10vh;
+}
+#tuner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+#tuner-header h1 {
+  font-weight: 200;
+  letter-spacing: 0.25em;
+  font-size: clamp(1.3rem, 5vw, 2rem);
+}
+#tuner-header .hint { margin-top: 8px; }
+#tuner h3 {
+  color: var(--accent-2);
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin: 28px 0 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.link-btn {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+  color: var(--text);
+}
+
+#bench {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+#bench-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+#bench-row .bar-btn { flex: 0 0 auto; }
+.bench-readout { text-align: center; min-width: 64px; }
+.bench-readout span {
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-2);
+}
+.bench-readout label {
+  display: block;
+  color: var(--dim);
+  font-size: 0.6rem;
+  letter-spacing: 0.25em;
+  margin-top: 2px;
+}
+#bench .quick-buttons { margin-top: 8px; }
+
+#tuner .setting-row input[type="range"] { height: 34px; }
+#tuner .setting-row { margin-bottom: 12px; }
+.param-check {
+  width: 26px;
+  height: 26px;
+  accent-color: var(--accent-2);
+}
+#preset-io textarea {
+  width: 100%;
+  margin-top: 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
 /* Controls and readouts must never be squeezed off-screen by the
    gauges — the dashboard is the flexible region, everything below it
    keeps its size. */
