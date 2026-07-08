@@ -39,27 +39,30 @@
 window.ENGINE_SOUND_PACK = {
 
   // Shown in Settings so you know which pack loaded.
-  name: 'V8 (AI generated)',
+  name: 'V8 (recorded)',
 
   // --- One-shot on engine start (set to null to disable) ------------
   // start: { file: 'start.mp3', volume: 1.0 },
   start: null,
 
   // --- Idle loop (standstill) ---------------------------------------
-  idle: { file: 'idle.mp3', rpm: 750, volume: 0.75 },
+  // Steady segment cut from the long idle recording (~73 Hz firing
+  // frequency measured => ~1100 RPM on a V8).
+  idle: { file: 'idle.wav', rpm: 1100, volume: 0.75 },
 
   // --- Gas: full throttle (REQUIRED) --------------------------------
-  gasFull: { file: 'on_1900.mp3', rpm: 1900, volume: 1.0 },
+  // Measured firing frequency ~180 Hz => ~2700 RPM.
+  gasFull: { file: 'gas_full.ogg', rpm: 2700, volume: 1.0 },
 
   // --- Gas: half throttle / cruise (set to null if you have no clip) -
   // Reusing the full-throttle clip a bit quieter until a dedicated
   // partial-throttle recording exists.
-  gasHalf: { file: 'on_1900.mp3', rpm: 1900, volume: 0.8 },
+  gasHalf: { file: 'gas_full.ogg', rpm: 2700, volume: 0.8 },
 
   // --- Gas: released / overrun (set to null if you have no clip) ----
-  // Reusing the idle clip: pitched up to the current RPM its lopey
-  // rumble works as a coasting/overrun burble.
-  gasRelease: { file: 'idle.mp3', rpm: 750, volume: 0.85 },
+  // A different steady segment of the idle recording, so coasting
+  // doesn't sound identical to standstill.
+  gasRelease: { file: 'gas_release.wav', rpm: 1100, volume: 0.85 },
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
   params: {

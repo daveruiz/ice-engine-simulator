@@ -20,6 +20,6 @@
  * Packs are only downloaded when selected, so a long list costs nothing.
  */
 window.ENGINE_SOUND_LIBRARY = [
-  { id: 'v8', name: 'V8 (AI generated)', dir: 'v8' },
+  { id: 'v8', name: 'V8 (recorded)', dir: 'v8' },
   // { id: 'i4-turbo', name: 'Inline-4 turbo', dir: 'i4-turbo' },
 ];

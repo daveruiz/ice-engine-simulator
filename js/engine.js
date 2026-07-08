@@ -24,7 +24,7 @@ class EngineSim {
       shiftUpRpm: 6200,    // upshift threshold under acceleration
       shiftDownRpm: 1800,  // downshift threshold
       shiftTime: 0.30,     // seconds of torque cut while shifting
-      firstGearFrac: 0.16, // fraction of maxSpeed reachable in 1st gear
+      firstGearFrac: 0.19, // fraction of maxSpeed reachable in 1st gear
     }, config);
     this._computeGearing();
     // Reconfiguring mid-drive: the current gear must exist in the new box
@@ -34,8 +34,11 @@ class EngineSim {
   }
 
   /**
-   * Geometric gear spacing (close ratios up top, short 1st gear),
-   * expressed as the road speed each gear reaches at maxRpm.
+   * Gear spacing expressed as the road speed each gear reaches at
+   * maxRpm. Real gearboxes space these nearly linearly — big RPM drops
+   * between the low gears, small ones between the high gears — unlike
+   * geometric spacing, which makes mid gears far too short and revs
+   * everything like a race car at city speeds.
    */
   _computeGearing() {
     const { gears, maxSpeed, firstGearFrac } = this.cfg;
@@ -44,9 +47,9 @@ class EngineSim {
       this.gearTopSpeed.push(maxSpeed);
       return;
     }
-    const step = Math.pow(firstGearFrac, 1 / (gears - 1));
     for (let i = 0; i < gears; i++) {
-      this.gearTopSpeed.push(maxSpeed * Math.pow(step, gears - 1 - i));
+      this.gearTopSpeed.push(
+        maxSpeed * (firstGearFrac + (1 - firstGearFrac) * (i / (gears - 1))));
     }
   }
 
@@ -122,9 +125,12 @@ class EngineSim {
     rate = Math.max(-maxBrake, Math.min(rate, maxAccel));
     this.speed = Math.max(0, this.speed + rate * dt);
 
-    // Smoothed acceleration estimate (km/h per second)
+    // Smoothed acceleration estimate (km/h per second). Falling accel
+    // tracks faster than rising: lifting off the gas must cut the
+    // engine load (and its sound) almost immediately.
     const instAccel = (this.speed - prevSpeed) / dt;
-    this.accel += (instAccel - this.accel) * Math.min(1, dt / 0.25);
+    const accelTau = instAccel < this.accel ? 0.1 : 0.25;
+    this.accel += (instAccel - this.accel) * Math.min(1, dt / accelTau);
 
     // --- driver style estimate ---
     // Hard acceleration (and hard braking) read as sporty driving. The
@@ -155,7 +161,9 @@ class EngineSim {
       load = cruise + this.accel / 14;
     }
     load = Math.max(0, Math.min(1, load));
-    this.throttle += (load - this.throttle) * Math.min(1, dt / (this.neutral ? 0.08 : 0.12));
+    // Asymmetric: throttle closes near-instantly, opens progressively
+    const thrTau = load < this.throttle ? 0.045 : (this.neutral ? 0.08 : 0.12);
+    this.throttle += (load - this.throttle) * Math.min(1, dt / thrTau);
 
     // --- gear selection (mimics driver / automatic gearbox behavior) ---
     this.kickdownInhibit = Math.max(0, this.kickdownInhibit - dt);
