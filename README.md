@@ -87,7 +87,9 @@ user gesture before audio can play).
     camshaft-rate chain rattle; an optional turbocharger spools with
     exhaust energy (whine, boost hiss, blow-off on lift); and on
     overrun, unburnt mixture ignites in the exhaust — pops emerge from
-    the same pipe model rather than being played back. **Every physical
+    the same pipe model rather than being played back. The synthesized
+    signal runs through an **FX bus** (low-shelf bass exaggeration,
+    mid/treble EQ, parallel tanh saturation). **Every physical
     parameter is tweakable live in [`tuner.html`](tuner.html)** (⚙
     Settings → Physical Engine Tuner): pipe lengths, muffler cutoff,
     firing pattern, cylinder count, turbo, pops… Presets can be

@@ -4,8 +4,9 @@
  *
  * All the DSP lives in an AudioWorklet (js/physical-worklet.js) so the
  * per-cylinder pulse trains and waveguides run sample-accurately off the
- * main thread. This class only owns the AudioContext, the output chain
- * (gain -> compressor) and the control messages.
+ * main thread. This class owns the AudioContext, the FX bus (EQ +
+ * parallel saturation), the output chain (gain -> compressor) and the
+ * control messages.
  *
  * Parameters come from PhysicalParams (js/physical-params.js): defaults
  * describe a cross-plane V8, overridden by whatever the tuner page
@@ -35,7 +36,7 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=16');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=17');
     this.ctx = ctx;
 
     this.node = new AudioWorkletNode(ctx, 'physical-engine', {
@@ -53,11 +54,71 @@ class PhysicalEngineSound {
     comp.ratio.value = 8;
     comp.attack.value = 0.003;
     comp.release.value = 0.15;
-    this.node.connect(this.master);
+    this._buildFx(ctx, this.node, this.master);
     this.master.connect(comp);
     comp.connect(ctx.destination);
     this.master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.3);
     this.running = true;
+  }
+
+  /**
+   * FX bus between the synthesis worklet and the master gain:
+   * low shelf (bass exaggeration) -> mid peak -> high shelf ->
+   * parallel tanh saturation (dry + shaped paths summed). Controlled by
+   * the fx group of the parameter schema, live like everything else.
+   */
+  _buildFx(ctx, from, to) {
+    this.eqBass = ctx.createBiquadFilter();
+    this.eqBass.type = 'lowshelf';
+    this.eqMid = ctx.createBiquadFilter();
+    this.eqMid.type = 'peaking';
+    this.eqMid.Q.value = 0.9;
+    this.eqTreble = ctx.createBiquadFilter();
+    this.eqTreble.type = 'highshelf';
+    this.eqTreble.frequency.value = 4500;
+    this.shaper = ctx.createWaveShaper();
+    this.shaper.oversample = '2x';
+    this.satDry = ctx.createGain();
+    this.satWet = ctx.createGain();
+    from.connect(this.eqBass);
+    this.eqBass.connect(this.eqMid);
+    this.eqMid.connect(this.eqTreble);
+    this.eqTreble.connect(this.satDry);
+    this.eqTreble.connect(this.shaper);
+    this.shaper.connect(this.satWet);
+    this.satDry.connect(to);
+    this.satWet.connect(to);
+    this._satDrive = 0;
+    this._applyFx();
+  }
+
+  _applyFx() {
+    const p = this.params;
+    const t = this.ctx.currentTime;
+    const S = 0.03;
+    this.eqBass.frequency.setTargetAtTime(p.bassFreq, t, S);
+    this.eqBass.gain.setTargetAtTime(p.bassGain, t, S);
+    this.eqMid.frequency.setTargetAtTime(p.midFreq, t, S);
+    this.eqMid.gain.setTargetAtTime(p.midGain, t, S);
+    this.eqTreble.gain.setTargetAtTime(p.trebleGain, t, S);
+    if (this._satDrive !== p.satDrive) {
+      this._satDrive = p.satDrive;
+      this.shaper.curve = PhysicalEngineSound._satCurve(p.satDrive);
+    }
+    this.satDry.gain.setTargetAtTime(1 - p.satMix, t, S);
+    this.satWet.gain.setTargetAtTime(p.satMix, t, S);
+  }
+
+  /** tanh saturation curve normalized to ±1 at full scale. */
+  static _satCurve(drive) {
+    const n = 1024;
+    const curve = new Float32Array(n);
+    const norm = 1 / Math.tanh(drive);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(drive * x) * norm;
+    }
+    return curve;
   }
 
   stop() {
@@ -90,6 +151,7 @@ class PhysicalEngineSound {
     this.params = params;
     if (this.node) {
       this.node.port.postMessage({ type: 'params', params });
+      this._applyFx();
     }
   }
 

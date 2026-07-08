@@ -22,6 +22,7 @@ window.PhysicalParams = (function () {
     { id: 'turbo',   name: 'Turbocharger' },
     { id: 'pops',    name: 'Overrun pops' },
     { id: 'out',     name: 'Output' },
+    { id: 'fx',      name: 'FX bus (EQ & saturation)' },
   ];
 
   /**
@@ -160,6 +161,31 @@ window.PhysicalParams = (function () {
       info: 'Final tone control (listener distance / cabin filtering).' },
     { key: 'masterGain', group: 'out', label: 'Master level',
       min: 0, max: 2, step: 0.01, def: 1.0 },
+
+    // ---- FX bus (post-synthesis EQ + parallel saturation) ----
+    // Runs as native WebAudio nodes after the worklet (see physical.js):
+    // low shelf -> mid peak -> high shelf -> parallel tanh saturation.
+    { key: 'bassFreq', group: 'fx', label: 'Bass shelf frequency', unit: 'Hz',
+      min: 40, max: 300, step: 5, def: 120,
+      info: 'Everything below this gets the bass boost — the felt rumble lives at 50–150 Hz.' },
+    { key: 'bassGain', group: 'fx', label: 'Bass boost', unit: 'dB',
+      min: 0, max: 18, step: 0.5, def: 7,
+      info: 'Low-shelf gain. Exaggerates the cycle-rate rumble the muffler eats.' },
+    { key: 'midFreq', group: 'fx', label: 'Mid EQ frequency', unit: 'Hz',
+      min: 200, max: 4000, step: 25, def: 500,
+      info: 'Center of the mid peaking band.' },
+    { key: 'midGain', group: 'fx', label: 'Mid EQ gain', unit: 'dB',
+      min: -12, max: 12, step: 0.5, def: 0,
+      info: 'Cut to remove boxiness (400–800 Hz), boost for growl.' },
+    { key: 'trebleGain', group: 'fx', label: 'Treble shelf gain', unit: 'dB',
+      min: -24, max: 12, step: 0.5, def: 0,
+      info: 'High shelf at 4.5 kHz — tame hiss/rattle or add edge.' },
+    { key: 'satDrive', group: 'fx', label: 'Saturation drive',
+      min: 1, max: 10, step: 0.1, def: 2.5,
+      info: 'tanh drive of the saturated path. Adds harmonics that make the bass audible on small speakers.' },
+    { key: 'satMix', group: 'fx', label: 'Saturation mix',
+      min: 0, max: 1, step: 0.01, def: 0.35,
+      info: 'Parallel blend: 0 = clean, 1 = fully saturated. Parallel keeps combustion transients punchy.' },
   ];
 
   function defaults() {
