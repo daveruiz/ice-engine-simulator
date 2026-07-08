@@ -199,7 +199,7 @@ class SampleEngineSound {
     setBand(this.b.gasRelease, w.release * level);
     if (this.b.idle) {
       this.b.idle.source.playbackRate.setTargetAtTime(
-        clamp((rpm / this.b.idle.rpm) * P.pitch, 0.35, 2), t, S);
+        clamp((rpm / this.b.idle.rpm) * P.pitch, 0.15, 2), t, S);
       this.b.idle.gain.gain.setTargetAtTime(
         idleBlend * this.b.idle.volume * this.b.idle.norm * P.masterVolume, t, S);
     }

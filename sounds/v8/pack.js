@@ -46,8 +46,9 @@ window.ENGINE_SOUND_PACK = {
   start: null,
 
   // --- Idle loop (standstill) ---------------------------------------
-  // Measured firing frequency ~69 Hz => ~1030 RPM on a V8.
-  idle: { file: 'idle.wav', rpm: 1030, volume: 0.75 },
+  // rpm doubled vs the measured ~69 Hz: the analyzer locked onto the
+  // 2nd harmonic, and the clip sounds right one octave lower.
+  idle: { file: 'idle.wav', rpm: 2060, volume: 0.75 },
 
   // --- Gas: full throttle (REQUIRED) --------------------------------
   // Measured firing frequency ~180 Hz => ~2700 RPM.
@@ -56,11 +57,12 @@ window.ENGINE_SOUND_PACK = {
   // --- Gas: half throttle / cruise (set to null if you have no clip) -
   // Intentionally shares the same recording as gasRelease (one file on
   // disk, two slots pointing at it), a bit louder here.
-  gasHalf: { file: 'gas_release.wav', rpm: 1100, volume: 0.95 },
+  gasHalf: { file: 'gas_release.wav', rpm: 2200, volume: 0.95 },
 
   // --- Gas: released / overrun (set to null if you have no clip) ----
-  // Steady segment cut from the long recording (~73 Hz => ~1100 RPM).
-  gasRelease: { file: 'gas_release.wav', rpm: 1100, volume: 0.85 },
+  // Steady segment cut from the long recording. rpm doubled vs the
+  // measured ~73 Hz (2nd harmonic lock) — sounds right an octave lower.
+  gasRelease: { file: 'gas_release.wav', rpm: 2200, volume: 0.85 },
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
   params: {
