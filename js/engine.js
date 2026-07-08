@@ -227,8 +227,9 @@ class EngineSim {
     if (this.neutral) {
       targetRpm = cfg.idleRpm +
         Math.pow(this.revDemand, 1.3) * (cfg.maxRpm - cfg.idleRpm);
-      // an unloaded engine revs up fast and falls back slower
-      tau = targetRpm > this.rpm ? 0.14 : 0.35;
+      // an unloaded engine revs up fast and falls back much slower
+      // (flywheel inertia — the revs hang before settling to idle)
+      tau = targetRpm > this.rpm ? 0.14 : 0.7;
     } else {
       targetRpm = this.rpmInGear(this.speed, this.gear - 1);
       tau = this.shiftTimer > 0 ? 0.16 : 0.09;

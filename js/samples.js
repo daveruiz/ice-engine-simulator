@@ -32,6 +32,7 @@ class SampleEngineSound {
   static defaultParams() {
     return {
       masterVolume: 1.0,
+      pitch: 1.0,
       revBoost: 1.4,
       releaseMaxLoad: 0.2,
       halfLoad: 0.5,
@@ -190,7 +191,7 @@ class SampleEngineSound {
     const setBand = (b, weight) => {
       if (!b) return;
       b.source.playbackRate.setTargetAtTime(
-        clamp(rpm / b.rpm, P.minPitch, P.maxPitch), t, S);
+        clamp((rpm / b.rpm) * P.pitch, P.minPitch, P.maxPitch), t, S);
       b.gain.gain.setTargetAtTime(weight * b.volume * b.norm, t, S);
     };
     setBand(this.b.gasFull, w.full * level);
@@ -198,7 +199,7 @@ class SampleEngineSound {
     setBand(this.b.gasRelease, w.release * level);
     if (this.b.idle) {
       this.b.idle.source.playbackRate.setTargetAtTime(
-        clamp(rpm / this.b.idle.rpm, 0.5, 2), t, S);
+        clamp((rpm / this.b.idle.rpm) * P.pitch, 0.35, 2), t, S);
       this.b.idle.gain.gain.setTargetAtTime(
         idleBlend * this.b.idle.volume * this.b.idle.norm * P.masterVolume, t, S);
     }

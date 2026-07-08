@@ -67,6 +67,11 @@ window.ENGINE_SOUND_PACK = {
     // Overall loudness of the pack (the in-app Volume slider still applies).
     masterVolume: 1.0,
 
+    // Global pitch scale for every slot: 1.0 = play each clip at its
+    // recorded pitch at its reference RPM. Lower = deeper engine sound
+    // everywhere (0.7 makes 850 RPM sound like ~600 RPM).
+    pitch: 0.7,
+
     // How much louder the engine gets as revs rise: 0 = same loudness at
     // all RPM, 1.4 = 2.4x louder at the rev limiter than at low RPM.
     revBoost: 1.4,
