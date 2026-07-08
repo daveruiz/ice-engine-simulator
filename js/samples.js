@@ -1,21 +1,24 @@
 /**
  * SampleEngineSound — engine sound driven by recorded/generated samples.
  *
- * Loads a pack described by a manifest (see sounds/README.md) with any
- * number of loopable samples per ladder:
- *   - "on"   : engine under load at a known steady RPM (at least 1 required)
- *   - "off"  : overrun / throttle-closed at a known RPM (optional)
- *   - "idle" : idle loop (optional)
- *   - "start"/"stop" : one-shots (optional)
+ * The pack is defined in ONE editable file: sounds/v8/pack.js (loaded as
+ * a plain script so it can carry comments). It maps sounds to load-based
+ * slots:
  *
- * Playback: every band loops continuously; its playbackRate follows
- * rpm / sampleRpm (racing-game style pitch tracking) and the two bands
- * nearest to the current RPM get an equal-power crossfade. Engine load
- * blends the on/off ladders and drives a lowpass, so a pack with a
- * single "on" sample still produces the full on/off-throttle dynamic.
+ *   start      one-shot when the engine starts            (optional)
+ *   idle       loop at standstill / idling                (optional)
+ *   gasFull    loop, engine at full throttle              (REQUIRED)
+ *   gasHalf    loop, engine at partial throttle / cruise  (optional)
+ *   gasRelease loop, throttle released / overrun          (optional)
  *
- * Loops are made seamless at load time by blending the tail into the
- * head, and normalized to a common RMS so bands don't jump in volume.
+ * Every loop is pitch-shifted to the current RPM (playbackRate =
+ * rpm / slot.rpm) and the gas slots are crossfaded by engine load.
+ * Missing optional slots degrade gracefully: without gasHalf the blend
+ * goes straight from release to full; without gasRelease a load-tracking
+ * lowpass + volume floor supplies the closed-throttle character.
+ *
+ * Loops are made seamless (tail-into-head crossfade) and RMS-normalized
+ * at load time, so clips don't need perfect seams or matched levels.
  */
 class SampleEngineSound {
   constructor(pack) {
@@ -25,21 +28,57 @@ class SampleEngineSound {
     this.volume = 0.7;
   }
 
-  /** Fetch manifest + audio files. Throws if the pack is unusable. */
-  static async loadPack(url) {
-    const res = await fetch(url, { cache: 'no-cache' });
-    if (!res.ok) throw new Error('manifest not found');
-    const manifest = await res.json();
-    const base = url.slice(0, url.lastIndexOf('/') + 1);
-    const samples = await Promise.all((manifest.samples || []).map(async (s) => {
-      const r = await fetch(base + s.file);
-      if (!r.ok) throw new Error('missing sample ' + s.file);
-      return { rpm: s.rpm || 0, type: s.type, data: await r.arrayBuffer() };
-    }));
-    if (!samples.some((s) => s.type === 'on')) {
-      throw new Error("pack needs at least one 'on' sample");
+  /** Tunables the pack file may override in its `params` section. */
+  static defaultParams() {
+    return {
+      masterVolume: 1.0,
+      revBoost: 1.4,
+      releaseMaxLoad: 0.2,
+      halfLoad: 0.5,
+      fullMinLoad: 0.85,
+      idleFadeStartRpm: 900,
+      idleFadeEndRpm: 1300,
+      minPitch: 0.25,
+      maxPitch: 4.0,
+      filterMinHz: 260,
+      filterLoadHz: 4200,
+      filterRpmHz: 2200,
+    };
+  }
+
+  /**
+   * Load `pack.js` from the pack directory (it must define
+   * window.ENGINE_SOUND_PACK), then fetch every referenced sound file.
+   */
+  static async loadPack(baseUrl) {
+    const def = await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = baseUrl + 'pack.js?ts=' + Date.now();
+      s.onload = () => {
+        s.remove();
+        window.ENGINE_SOUND_PACK
+          ? resolve(window.ENGINE_SOUND_PACK)
+          : reject(new Error('pack.js did not define ENGINE_SOUND_PACK'));
+      };
+      s.onerror = () => { s.remove(); reject(new Error('no pack.js found')); };
+      document.head.appendChild(s);
+    });
+
+    const params = Object.assign(SampleEngineSound.defaultParams(), def.params);
+    const slots = {};
+    for (const key of ['start', 'idle', 'gasFull', 'gasHalf', 'gasRelease']) {
+      const slot = def[key];
+      if (!slot || !slot.file) continue;
+      const r = await fetch(baseUrl + slot.file);
+      if (!r.ok) throw new Error('missing sound file ' + slot.file);
+      slots[key] = {
+        rpm: slot.rpm || 0,
+        volume: slot.volume == null ? 1 : slot.volume,
+        data: await r.arrayBuffer(),
+      };
     }
-    return { name: manifest.name || 'Sample pack', samples };
+    if (!slots.gasFull) throw new Error("pack needs at least a 'gasFull' sound");
+    return { name: def.name || 'Sample pack', params, slots };
   }
 
   async start() {
@@ -50,13 +89,11 @@ class SampleEngineSound {
     await ctx.resume();
 
     // decodeAudioData detaches the ArrayBuffer — slice so restarts work
-    const decoded = await Promise.all(this.pack.samples.map(async (s) => ({
-      rpm: s.rpm,
-      type: s.type,
-      buffer: await ctx.decodeAudioData(s.data.slice(0)),
-    })));
+    const decoded = {};
+    for (const [key, s] of Object.entries(this.pack.slots)) {
+      decoded[key] = { ...s, buffer: await ctx.decodeAudioData(s.data.slice(0)) };
+    }
     if (!this.ctx) return; // stopped while decoding
-
     const t = ctx.currentTime;
 
     // Output chain: master -> compressor -> destination
@@ -70,15 +107,17 @@ class SampleEngineSound {
     this.master.connect(this.comp);
     this.comp.connect(ctx.destination);
 
-    // On-throttle bus gets a load-tracking lowpass (muffled when closed)
-    this.onFilter = ctx.createBiquadFilter();
-    this.onFilter.type = 'lowpass';
-    this.onFilter.frequency.value = 1200;
-    this.onFilter.Q.value = 0.9;
-    this.onFilter.connect(this.master);
+    // Full/half-throttle bus goes through a load-tracking lowpass
+    // (muffled when the throttle closes); release/idle skip it since
+    // those recordings are naturally muffled already.
+    this.gasFilter = ctx.createBiquadFilter();
+    this.gasFilter.type = 'lowpass';
+    this.gasFilter.frequency.value = 1200;
+    this.gasFilter.Q.value = 0.9;
+    this.gasFilter.connect(this.master);
 
-    const makeBand = (s, dest) => {
-      const seam = SampleEngineSound._makeSeamless(ctx, s.buffer);
+    const makeLoop = (slot, dest) => {
+      const seam = SampleEngineSound._makeSeamless(ctx, slot.buffer);
       const source = ctx.createBufferSource();
       source.buffer = seam.buffer;
       source.loop = true;
@@ -87,18 +126,16 @@ class SampleEngineSound {
       source.connect(gain);
       gain.connect(dest);
       source.start(t);
-      return { rpm: s.rpm, source, gain, norm: seam.norm };
+      return { rpm: slot.rpm, volume: slot.volume, source, gain, norm: seam.norm };
     };
 
-    const byRpm = (a, b) => a.rpm - b.rpm;
-    this.on = decoded.filter((s) => s.type === 'on')
-      .map((s) => makeBand(s, this.onFilter)).sort(byRpm);
-    this.off = decoded.filter((s) => s.type === 'off')
-      .map((s) => makeBand(s, this.master)).sort(byRpm);
-    this.idle = decoded.filter((s) => s.type === 'idle')
-      .map((s) => makeBand(s, this.master))[0] || null;
-    this.startShot = (decoded.find((s) => s.type === 'start') || {}).buffer;
-    this.stopShot = (decoded.find((s) => s.type === 'stop') || {}).buffer;
+    this.b = {
+      idle: decoded.idle ? makeLoop(decoded.idle, this.master) : null,
+      gasFull: makeLoop(decoded.gasFull, this.gasFilter),
+      gasHalf: decoded.gasHalf ? makeLoop(decoded.gasHalf, this.gasFilter) : null,
+      gasRelease: decoded.gasRelease ? makeLoop(decoded.gasRelease, this.master) : null,
+    };
+    this.startShot = decoded.start || null;
 
     if (this.startShot) this._playShot(this.startShot);
     this.master.gain.setTargetAtTime(this.volume, t, 0.3);
@@ -111,24 +148,14 @@ class SampleEngineSound {
     const ctx = this.ctx;
     this.ctx = null;
     this.master.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
-    if (this.stopShot) {
-      // shut-off one-shot bypasses the fading master
-      const src = ctx.createBufferSource();
-      src.buffer = this.stopShot;
-      const g = ctx.createGain();
-      g.gain.value = this.volume;
-      src.connect(g);
-      g.connect(this.comp);
-      src.start();
-    }
-    setTimeout(() => ctx.close().catch(() => {}), 1200);
+    setTimeout(() => ctx.close().catch(() => {}), 400);
   }
 
-  _playShot(buffer) {
+  _playShot(slot) {
     const src = this.ctx.createBufferSource();
-    src.buffer = buffer;
+    src.buffer = slot.buffer;
     const g = this.ctx.createGain();
-    g.gain.value = this.volume;
+    g.gain.value = this.volume * slot.volume;
     src.connect(g);
     g.connect(this.comp);
     src.start();
@@ -137,8 +164,10 @@ class SampleEngineSound {
   /** Same interface as the synth engine — call every frame. */
   update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir) {
     if (!this.running || !this.ctx) return;
+    const P = this.pack.params;
     const t = this.ctx.currentTime;
     const S = 0.05;
+    const clamp = SampleEngineSound._clamp;
 
     // Upshift: torque cut. Downshift: rev-match blip.
     let load = throttle;
@@ -147,55 +176,71 @@ class SampleEngineSound {
     }
     const rpmNorm = Math.min(1, rpm / maxRpm);
 
-    // Dedicated idle loop takes over at the bottom of the range
-    const idleBlend = this.idle
-      ? Math.max(0, Math.min(1, (1250 - rpm) / 350)) : 0;
+    // Idle loop takes over at the bottom of the rev range
+    const idleBlend = this.b.idle
+      ? clamp((P.idleFadeEndRpm - rpm) / (P.idleFadeEndRpm - P.idleFadeStartRpm), 0, 1)
+      : 0;
 
-    // On/off ladder blend by engine load; without an off ladder the
-    // lowpass alone provides the closed-throttle character. Real engines
-    // also get louder with revs, and pitch-shifting samples up spreads
-    // their energy thinner, so a rev-linked boost keeps full-load pulls
-    // clearly louder than idle.
-    const revBoost = (0.65 + 0.85 * rpmNorm) * 1.9;
-    const onLevel = (this.off.length ? 0.08 + 0.92 * load : 0.25 + 0.75 * load)
-      * revBoost * (1 - idleBlend);
-    const offLevel = this.off.length
-      ? (1 - load) * (0.25 + 0.75 * rpmNorm) * revBoost * (1 - idleBlend) : 0;
+    // Gas layer crossfade by load, louder with revs (pitch-shifting up
+    // spreads sample energy thinner, so this also compensates for that)
+    const w = this._gasWeights(load);
+    const level = P.masterVolume * 1.25 * (1 + P.revBoost * rpmNorm)
+      * (1 - idleBlend) * w.floorGain;
 
-    this._setLadder(this.on, rpm, onLevel, t, S);
-    this._setLadder(this.off, rpm, offLevel, t, S);
-    if (this.idle) {
-      this.idle.source.playbackRate.setTargetAtTime(
-        SampleEngineSound._clamp(rpm / this.idle.rpm, 0.5, 2), t, S);
-      this.idle.gain.gain.setTargetAtTime(idleBlend * this.idle.norm * 0.75, t, S);
+    const setBand = (b, weight) => {
+      if (!b) return;
+      b.source.playbackRate.setTargetAtTime(
+        clamp(rpm / b.rpm, P.minPitch, P.maxPitch), t, S);
+      b.gain.gain.setTargetAtTime(weight * b.volume * b.norm, t, S);
+    };
+    setBand(this.b.gasFull, w.full * level);
+    setBand(this.b.gasHalf, w.half * level);
+    setBand(this.b.gasRelease, w.release * level);
+    if (this.b.idle) {
+      this.b.idle.source.playbackRate.setTargetAtTime(
+        clamp(rpm / this.b.idle.rpm, 0.5, 2), t, S);
+      this.b.idle.gain.gain.setTargetAtTime(
+        idleBlend * this.b.idle.volume * this.b.idle.norm * P.masterVolume, t, S);
     }
 
-    const cutoff = 260 + load * 4200 + rpmNorm * 2200;
-    this.onFilter.frequency.setTargetAtTime(cutoff, t, S);
+    const cutoff = P.filterMinHz + load * P.filterLoadHz + rpmNorm * P.filterRpmHz;
+    this.gasFilter.frequency.setTargetAtTime(cutoff, t, S);
   }
 
-  /** Pitch every band to the target rpm, crossfade the two nearest. */
-  _setLadder(bands, rpm, level, t, S) {
-    if (!bands.length) return;
-    for (const b of bands) {
-      b.source.playbackRate.setTargetAtTime(
-        SampleEngineSound._clamp(rpm / b.rpm, 0.25, 4), t, S);
-    }
-    const w = new Array(bands.length).fill(0);
-    if (rpm <= bands[0].rpm || bands.length === 1) {
-      w[0] = 1;
-    } else if (rpm >= bands[bands.length - 1].rpm) {
-      w[bands.length - 1] = 1;
+  /**
+   * Blend weights for the three gas layers at a given load, with
+   * graceful fallbacks when optional slots are missing. `floorGain`
+   * quiets the remaining layers at low load when there is no
+   * gasRelease sample to hand over to.
+   */
+  _gasWeights(load) {
+    const P = this.pack.params;
+    const hasHalf = !!this.b.gasHalf;
+    const hasRel = !!this.b.gasRelease;
+    const xf = (x) => [Math.cos(x * Math.PI / 2), Math.sin(x * Math.PI / 2)];
+    let full = 0, half = 0, release = 0, floorGain = 1;
+
+    if (hasHalf && hasRel) {
+      if (load <= P.releaseMaxLoad) release = 1;
+      else if (load >= P.fullMinLoad) full = 1;
+      else if (load < P.halfLoad) {
+        [release, half] = xf((load - P.releaseMaxLoad) / (P.halfLoad - P.releaseMaxLoad));
+      } else {
+        [half, full] = xf((load - P.halfLoad) / (P.fullMinLoad - P.halfLoad));
+      }
+    } else if (hasRel) {
+      if (load <= P.releaseMaxLoad) release = 1;
+      else if (load >= P.fullMinLoad) full = 1;
+      else [release, full] = xf((load - P.releaseMaxLoad) / (P.fullMinLoad - P.releaseMaxLoad));
+    } else if (hasHalf) {
+      if (load >= P.fullMinLoad) full = 1;
+      else if (load >= P.halfLoad) [half, full] = xf((load - P.halfLoad) / (P.fullMinLoad - P.halfLoad));
+      else { half = 1; floorGain = 0.25 + 0.75 * (load / P.halfLoad); }
     } else {
-      let i = 0;
-      while (rpm > bands[i + 1].rpm) i++;
-      const x = (Math.log(rpm) - Math.log(bands[i].rpm)) /
-                (Math.log(bands[i + 1].rpm) - Math.log(bands[i].rpm));
-      w[i] = Math.cos(x * Math.PI / 2);      // equal-power crossfade
-      w[i + 1] = Math.sin(x * Math.PI / 2);
+      full = 1;
+      floorGain = 0.25 + 0.75 * load;
     }
-    bands.forEach((b, i) =>
-      b.gain.gain.setTargetAtTime(w[i] * level * b.norm, t, S));
+    return { full, half, release, floorGain };
   }
 
   setVolume(v) {

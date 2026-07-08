@@ -74,12 +74,14 @@ user gesture before audio can play).
     oscillators through waveshaper distortion and a throttle-tracking
     lowpass, plus band-passed noise for intake/exhaust breath.
   - **Sample pack** (`js/samples.js`, used automatically when present):
-    drop loopable recordings in `sounds/v8/` with a manifest — see
-    [sounds/README.md](sounds/README.md). A *single* steady on-throttle
-    loop is enough (it's pitch-shifted across the RPM range, racing-game
-    style); multiple RPM bands, an off-throttle ladder, idle loop and
-    start/stop one-shots all improve realism when available. Loops are
-    made seamless and volume-normalized at load time.
+    configured entirely in the editable, commented
+    [`sounds/v8/pack.js`](sounds/v8/pack.js) — see
+    [sounds/README.md](sounds/README.md). Load-based slots (`start`,
+    `idle`, `gasFull`, `gasHalf`, `gasRelease`) are crossfaded by engine
+    load and pitch-shifted to the current RPM, racing-game style. A
+    *single* full-throttle loop is a complete pack; every optional slot
+    improves realism. Loops are made seamless and volume-normalized at
+    load time.
 - **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
   gear indicator and shift light, styled like an instrument cluster.
 

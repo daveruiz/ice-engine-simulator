@@ -1,7 +1,0 @@
-{
-  "name": "V8 (AI generated)",
-  "samples": [
-    { "file": "idle.mp3",    "rpm": 750,  "type": "idle" },
-    { "file": "on_1900.mp3", "rpm": 1900, "type": "on"   }
-  ]
-}

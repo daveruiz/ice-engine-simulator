@@ -28,8 +28,8 @@
   const engine = new EngineSim(engineConfig());
 
   // Sound engines: synth is always available; the sample engine appears
-  // if a pack is found at sounds/v8/manifest.json.
-  const SAMPLE_PACK_URL = 'sounds/v8/manifest.json';
+  // if a pack is found (sounds/v8/pack.js — the user-editable config).
+  const SAMPLE_PACK_BASE = 'sounds/v8/';
   const synthSound = new EngineSound();
   let sampleSound = null;
   let sound = synthSound; // active engine
@@ -129,14 +129,14 @@
 
   function loadSamplePack() {
     const hint = $('soundset-hint');
-    SampleEngineSound.loadPack(SAMPLE_PACK_URL).then((pack) => {
+    SampleEngineSound.loadPack(SAMPLE_PACK_BASE).then((pack) => {
       sampleSound = new SampleEngineSound(pack);
       hint.textContent = 'Sample pack found: ' + pack.name +
-        ' (' + pack.samples.length + ' samples)';
+        ' (' + Object.keys(pack.slots).join(', ') + ')';
       setActiveSound();
-    }).catch(() => {
-      hint.textContent =
-        'No sample pack found in sounds/v8/ — using synthesized sound.';
+    }).catch((e) => {
+      hint.textContent = 'No sample pack loaded (' + e.message +
+        ') — using synthesized sound.';
     });
   }
 
