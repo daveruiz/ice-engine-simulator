@@ -20,12 +20,19 @@
     shiftDownRpm: 1800,
     maxSpeed: 250,      // always stored in km/h
     volume: 70,
+    soundSet: 'samples', // prefer real samples; falls back to synth
   };
 
   let settings = loadSettings();
 
   const engine = new EngineSim(engineConfig());
-  const sound = new EngineSound();
+
+  // Sound engines: synth is always available; the sample engine appears
+  // if a pack is found at sounds/v8/manifest.json.
+  const SAMPLE_PACK_URL = 'sounds/v8/manifest.json';
+  const synthSound = new EngineSound();
+  let sampleSound = null;
+  let sound = synthSound; // active engine
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -100,7 +107,37 @@
     el.speedUnitLabel.textContent = unitLabel();
     sound.setVolume(settings.volume / 100);
     setSource(settings.source);
+    setActiveSound();
     saveSettings();
+  }
+
+  // ---------- Sound engine selection ----------
+  function activeSoundFor() {
+    return (settings.soundSet === 'samples' && sampleSound)
+      ? sampleSound : synthSound;
+  }
+
+  /** Swap sound engines, restarting audio if it's currently playing. */
+  async function setActiveSound() {
+    const next = activeSoundFor();
+    if (next === sound) return;
+    const wasOn = engineOn;
+    if (wasOn) stopEngine();
+    sound = next;
+    if (wasOn) await startEngine();
+  }
+
+  function loadSamplePack() {
+    const hint = $('soundset-hint');
+    SampleEngineSound.loadPack(SAMPLE_PACK_URL).then((pack) => {
+      sampleSound = new SampleEngineSound(pack);
+      hint.textContent = 'Sample pack found: ' + pack.name +
+        ' (' + pack.samples.length + ' samples)';
+      setActiveSound();
+    }).catch(() => {
+      hint.textContent =
+        'No sample pack found in sounds/v8/ — using synthesized sound.';
+    });
   }
 
   // ---------- Speed sources ----------
@@ -251,6 +288,7 @@
   function syncSettingsUI() {
     $('set-source').value = settings.source;
     $('set-units').value = settings.units;
+    $('set-soundset').value = settings.soundSet;
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
       $(outId).textContent = fmt(settings[key]);
@@ -283,6 +321,10 @@
     });
     $('set-units').addEventListener('change', (e) => {
       settings.units = e.target.value;
+      applySettings();
+    });
+    $('set-soundset').addEventListener('change', (e) => {
+      settings.soundSet = e.target.value;
       applySettings();
     });
     $('btn-reset-defaults').addEventListener('click', () => {
@@ -384,8 +426,13 @@
   // ---------- Boot ----------
   initSettingsUI();
   applySettings();
+  loadSamplePack();
   requestAnimationFrame(loop);
 
   // Debug/testing hook
-  window.__ice = { engine, sound, get settings() { return settings; } };
+  window.__ice = {
+    engine,
+    get sound() { return sound; },
+    get settings() { return settings; },
+  };
 })();

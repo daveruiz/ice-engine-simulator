@@ -68,12 +68,18 @@ user gesture before audio can play).
     only as the car comes down below ~10 km/h do the gears drop through
     quickly so it's back in 1st when it halts. Downshifts get a rev-match
     throttle blip in the sound; upshifts get a torque cut.
-- **Sound** (`js/sound.js`): fully synthesized placeholder (v1). Firing
-  frequency `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
-  oscillators through waveshaper distortion and a throttle-tracking lowpass,
-  plus band-passed noise for intake/exhaust breath. Load controls loudness
-  *and* brightness — the on/off-throttle difference that makes ICE cars sound
-  alive. Real recorded samples can replace this layer later.
+- **Sound** — two interchangeable engines (Settings → Sound):
+  - **Synthesized** (`js/sound.js`, always available): firing frequency
+    `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
+    oscillators through waveshaper distortion and a throttle-tracking
+    lowpass, plus band-passed noise for intake/exhaust breath.
+  - **Sample pack** (`js/samples.js`, used automatically when present):
+    drop loopable recordings in `sounds/v8/` with a manifest — see
+    [sounds/README.md](sounds/README.md). A *single* steady on-throttle
+    loop is enough (it's pitch-shifted across the RPM range, racing-game
+    style); multiple RPM bands, an off-throttle ladder, idle loop and
+    start/stop one-shots all improve realism when available. Loops are
+    made seamless and volume-normalized at load time.
 - **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
   gear indicator and shift light, styled like an instrument cluster.
 
@@ -95,7 +101,6 @@ Settings persist in `localStorage`.
 
 ## Roadmap
 
-- Replace synthesized layers with granular playback of real engine recordings
 - Overrun pops/burbles and turbo/supercharger layers
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available
