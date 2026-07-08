@@ -152,18 +152,22 @@ class SampleEngineSound {
       ? Math.max(0, Math.min(1, (1250 - rpm) / 350)) : 0;
 
     // On/off ladder blend by engine load; without an off ladder the
-    // lowpass alone provides the closed-throttle character.
-    const onLevel = (this.off.length ? 0.08 + 0.92 * load : 0.22 + 0.78 * load)
-      * (1 - idleBlend);
+    // lowpass alone provides the closed-throttle character. Real engines
+    // also get louder with revs, and pitch-shifting samples up spreads
+    // their energy thinner, so a rev-linked boost keeps full-load pulls
+    // clearly louder than idle.
+    const revBoost = (0.65 + 0.85 * rpmNorm) * 1.9;
+    const onLevel = (this.off.length ? 0.08 + 0.92 * load : 0.25 + 0.75 * load)
+      * revBoost * (1 - idleBlend);
     const offLevel = this.off.length
-      ? (1 - load) * (0.25 + 0.75 * rpmNorm) * (1 - idleBlend) : 0;
+      ? (1 - load) * (0.25 + 0.75 * rpmNorm) * revBoost * (1 - idleBlend) : 0;
 
     this._setLadder(this.on, rpm, onLevel, t, S);
     this._setLadder(this.off, rpm, offLevel, t, S);
     if (this.idle) {
       this.idle.source.playbackRate.setTargetAtTime(
         SampleEngineSound._clamp(rpm / this.idle.rpm, 0.5, 2), t, S);
-      this.idle.gain.gain.setTargetAtTime(idleBlend * this.idle.norm, t, S);
+      this.idle.gain.gain.setTargetAtTime(idleBlend * this.idle.norm * 0.75, t, S);
     }
 
     const cutoff = 260 + load * 4200 + rpmNorm * 2200;
