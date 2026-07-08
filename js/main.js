@@ -20,19 +20,21 @@
     shiftDownRpm: 1800,
     maxSpeed: 250,      // always stored in km/h
     volume: 70,
-    soundSet: 'samples', // prefer real samples; falls back to synth
+    soundSet: 'auto',   // 'synth', a pack id, or 'auto' = first pack
   };
 
   let settings = loadSettings();
 
   const engine = new EngineSim(engineConfig());
 
-  // Sound engines: synth is always available; the sample engine appears
-  // if a pack is found (sounds/v8/pack.js — the user-editable config).
-  const SAMPLE_PACK_BASE = 'sounds/v8/';
+  // Sound engines: the built-in synth plus any sample packs registered
+  // in sounds/engines.js (one folder per engine, each with a pack.js).
+  // Packs are loaded lazily the first time they're selected.
   const synthSound = new EngineSound();
-  let sampleSound = null;
-  let sound = synthSound; // active engine
+  let soundLibrary = [];         // entries from sounds/engines.js
+  const packEngines = new Map(); // id -> SampleEngineSound | null (failed)
+  let sound = synthSound;        // active engine
+  let soundSwapToken = 0;        // guards concurrent engine swaps
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -64,7 +66,11 @@
   function loadSettings() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return Object.assign({}, DEFAULTS, JSON.parse(raw));
+      if (raw) {
+        const s = Object.assign({}, DEFAULTS, JSON.parse(raw));
+        if (s.soundSet === 'samples') s.soundSet = 'auto'; // pre-library format
+        return s;
+      }
     } catch (e) { /* private mode etc. */ }
     return Object.assign({}, DEFAULTS);
   }
@@ -112,32 +118,95 @@
   }
 
   // ---------- Sound engine selection ----------
-  function activeSoundFor() {
-    return (settings.soundSet === 'samples' && sampleSound)
-      ? sampleSound : synthSound;
+  function loadScriptGlobal(src, globalName) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src + '?ts=' + Date.now();
+      s.onload = () => {
+        s.remove();
+        window[globalName] ? resolve(window[globalName])
+          : reject(new Error(src + ' did not define ' + globalName));
+      };
+      s.onerror = () => { s.remove(); reject(new Error('missing ' + src)); };
+      document.head.appendChild(s);
+    });
   }
 
-  /** Swap sound engines, restarting audio if it's currently playing. */
+  /** Library entry for the current setting ('synth' resolves to null). */
+  function resolveSoundChoice() {
+    if (settings.soundSet === 'synth') return null;
+    return soundLibrary.find((e) => e.id === settings.soundSet)
+      || soundLibrary[0] || null;
+  }
+
+  async function ensurePackEngine(entry) {
+    if (packEngines.has(entry.id)) return packEngines.get(entry.id);
+    try {
+      const pack = await SampleEngineSound.loadPack('sounds/' + entry.dir + '/');
+      const eng = new SampleEngineSound(pack);
+      packEngines.set(entry.id, eng);
+      return eng;
+    } catch (e) {
+      packEngines.set(entry.id, null);
+      return null;
+    }
+  }
+
+  /** Activate the selected engine, restarting audio if it's playing. */
   async function setActiveSound() {
-    const next = activeSoundFor();
+    const token = ++soundSwapToken;
+    const entry = resolveSoundChoice();
+    let next = synthSound;
+    let note = 'Built-in synthesized engine.';
+    if (entry) {
+      const eng = await ensurePackEngine(entry);
+      if (token !== soundSwapToken) return; // superseded by a newer choice
+      if (eng) {
+        next = eng;
+        note = entry.name + ' — slots: ' +
+          Object.keys(eng.pack.slots).join(', ');
+      } else {
+        note = 'Pack "' + entry.name +
+          '" failed to load — using the synthesized engine.';
+      }
+    }
+    $('soundset-hint').textContent = note;
     if (next === sound) return;
     const wasOn = engineOn;
     if (wasOn) stopEngine();
     sound = next;
+    sound.setVolume(settings.volume / 100);
     if (wasOn) await startEngine();
   }
 
-  function loadSamplePack() {
-    const hint = $('soundset-hint');
-    SampleEngineSound.loadPack(SAMPLE_PACK_BASE).then((pack) => {
-      sampleSound = new SampleEngineSound(pack);
-      hint.textContent = 'Sample pack found: ' + pack.name +
-        ' (' + Object.keys(pack.slots).join(', ') + ')';
-      setActiveSound();
-    }).catch((e) => {
-      hint.textContent = 'No sample pack loaded (' + e.message +
-        ') — using synthesized sound.';
-    });
+  /** Rebuild the Engine dropdown from the library + built-in synth. */
+  function populateSoundSelect() {
+    const sel = $('set-soundset');
+    sel.innerHTML = '';
+    for (const e of soundLibrary) {
+      const o = document.createElement('option');
+      o.value = e.id;
+      o.textContent = e.name;
+      sel.appendChild(o);
+    }
+    const o = document.createElement('option');
+    o.value = 'synth';
+    o.textContent = 'Synthesized (built-in)';
+    sel.appendChild(o);
+    const entry = resolveSoundChoice();
+    sel.value = entry ? entry.id : 'synth';
+  }
+
+  async function loadSoundLibrary() {
+    try {
+      const lib = await loadScriptGlobal('sounds/engines.js', 'ENGINE_SOUND_LIBRARY');
+      soundLibrary = (Array.isArray(lib) ? lib : [])
+        .filter((e) => e && e.id && e.dir && e.id !== 'synth');
+    } catch (e) {
+      soundLibrary = [];
+    }
+    populateSoundSelect();
+    setActiveSound();
   }
 
   // ---------- Speed sources ----------
@@ -304,7 +373,7 @@
   function syncSettingsUI() {
     $('set-source').value = settings.source;
     $('set-units').value = settings.units;
-    $('set-soundset').value = settings.soundSet;
+    populateSoundSelect();
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
       $(outId).textContent = fmt(settings[key]);
@@ -442,7 +511,7 @@
   // ---------- Boot ----------
   initSettingsUI();
   applySettings();
-  loadSamplePack();
+  loadSoundLibrary();
   requestAnimationFrame(loop);
 
   // Debug/testing hook

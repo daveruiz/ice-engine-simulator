@@ -1,13 +1,18 @@
 # Engine sample packs
 
-The engine sounds live in `sounds/v8/` and are configured by **one
-editable file: [`sounds/v8/pack.js`](v8/pack.js)** — filenames, pitch
-references, volumes and every tuning knob, all documented with comments
-right in the file. Edit it, drop your audio files next to it, reload the
-page. No build step.
+Engines are registered in **[`sounds/engines.js`](engines.js)** — one
+line per engine, pointing at a folder that contains the audio files and
+a **`pack.js`** config ([`sounds/v8/pack.js`](v8/pack.js) is the
+template: filenames, pitch references, volumes and every tuning knob,
+all documented with comments right in the file). Edit, reload the page.
+No build step.
 
-If the pack fails to load, the app falls back to the built-in synthesized
-engine (also selectable anytime in Settings → Sound).
+All registered engines appear in Settings → Sound → Engine next to the
+built-in **Synthesized** engine, which is always available and is the
+fallback if a pack fails to load. Packs download lazily when selected.
+
+To add an engine: copy the `v8/` folder, swap the audio files, adjust
+its `pack.js`, and add an entry in `engines.js`.
 
 ## The slots
 

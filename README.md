@@ -73,15 +73,16 @@ user gesture before audio can play).
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
     oscillators through waveshaper distortion and a throttle-tracking
     lowpass, plus band-passed noise for intake/exhaust breath.
-  - **Sample pack** (`js/samples.js`, used automatically when present):
-    configured entirely in the editable, commented
-    [`sounds/v8/pack.js`](sounds/v8/pack.js) — see
+  - **Sample packs** (`js/samples.js`): an engine library registered in
+    the editable [`sounds/engines.js`](sounds/engines.js) — one folder
+    per engine, each configured by a commented
+    [`pack.js`](sounds/v8/pack.js); see
     [sounds/README.md](sounds/README.md). Load-based slots (`start`,
     `idle`, `gasFull`, `gasHalf`, `gasRelease`) are crossfaded by engine
     load and pitch-shifted to the current RPM, racing-game style. A
     *single* full-throttle loop is a complete pack; every optional slot
-    improves realism. Loops are made seamless and volume-normalized at
-    load time.
+    improves realism. Packs load lazily when selected in Settings, loops
+    are made seamless and volume-normalized at load time.
 - **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
   gear indicator and shift light, styled like an instrument cluster.
 

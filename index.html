@@ -10,7 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
 <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-<link rel="stylesheet" href="css/style.css?v=8">
+<link rel="stylesheet" href="css/style.css?v=9">
 </head>
 <body>
 
@@ -154,12 +154,11 @@
 
     <h3>Sound</h3>
     <div class="setting-row">
-      <label for="set-soundset">Engine sound</label>
+      <label for="set-soundset">Engine</label>
       <select id="set-soundset">
         <option value="synth">Synthesized (built-in)</option>
-        <option value="samples">Sample pack</option>
       </select>
-      <p class="hint" id="soundset-hint">Looking for a sample pack…</p>
+      <p class="hint" id="soundset-hint">Loading engine library…</p>
     </div>
     <div class="setting-row">
       <label for="set-volume">Volume <output id="out-volume"></output></label>
@@ -170,18 +169,18 @@
       <button id="btn-reset-defaults" class="bar-btn danger">RESET TO DEFAULTS</button>
     </div>
 
-    <p class="hint">Engine sounds are configured in <code>sounds/v8/pack.js</code> —
-    an editable, commented file mapping clips to start / idle / gas-full /
-    gas-half / gas-release slots (see the repo's sounds/README.md). A single
-    full-throttle loop is enough. GPS requires HTTPS and location
-    permission.</p>
+    <p class="hint">Engines are registered in <code>sounds/engines.js</code>; each one
+    is a folder with a commented <code>pack.js</code> mapping clips to start /
+    idle / gas-full / gas-half / gas-release slots (see the repo's
+    sounds/README.md). A single full-throttle loop is enough per engine.
+    GPS requires HTTPS and location permission.</p>
   </div>
 </div>
 
-<script src="js/engine.js?v=8"></script>
-<script src="js/sound.js?v=8"></script>
-<script src="js/samples.js?v=8"></script>
-<script src="js/dashboard.js?v=8"></script>
-<script src="js/main.js?v=8"></script>
+<script src="js/engine.js?v=9"></script>
+<script src="js/sound.js?v=9"></script>
+<script src="js/samples.js?v=9"></script>
+<script src="js/dashboard.js?v=9"></script>
+<script src="js/main.js?v=9"></script>
 </body>
 </html>
