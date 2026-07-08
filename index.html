@@ -10,7 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
 <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 
@@ -70,6 +70,10 @@
       <div class="pedal brake" id="pedal-brake" aria-label="Brake pedal">
         <div class="pedal-fill"></div>
         <span class="pedal-label">BRAKE</span>
+      </div>
+      <div id="gear-selector" aria-label="Gear selector">
+        <button id="mode-n" class="mode-btn">N</button>
+        <button id="mode-d" class="mode-btn active">D</button>
       </div>
       <div class="pedal gas" id="pedal-gas" aria-label="Gas pedal">
         <div class="pedal-fill"></div>
@@ -174,10 +178,10 @@
   </div>
 </div>
 
-<script src="js/engine.js?v=7"></script>
-<script src="js/sound.js?v=7"></script>
-<script src="js/samples.js?v=7"></script>
-<script src="js/dashboard.js?v=7"></script>
-<script src="js/main.js?v=7"></script>
+<script src="js/engine.js?v=8"></script>
+<script src="js/sound.js?v=8"></script>
+<script src="js/samples.js?v=8"></script>
+<script src="js/dashboard.js?v=8"></script>
+<script src="js/main.js?v=8"></script>
 </body>
 </html>

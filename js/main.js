@@ -151,6 +151,7 @@
     el.gpsStatus.classList.toggle('hidden', source !== 'gps');
     // Control area height changes with the source; re-fit the gauges
     requestAnimationFrame(onResize);
+    if (source !== 'pedals') setDriveMode('d'); // N only exists with pedals
     if (source === 'gps') {
       startGps();
     } else {
@@ -168,7 +169,18 @@
   // a light press, near the bottom is flooring it. Each pedal tracks its
   // own pointer, so gas and brake work simultaneously (multi-touch).
   const pedals = { gas: 0, brake: 0 };
-  let pedalSpeed = 0; // km/h integrated from pedal inputs
+  let pedalSpeed = 0;  // km/h integrated from pedal inputs
+  let driveMode = 'd'; // 'd' drive | 'n' neutral (gas free-revs the engine)
+
+  function setDriveMode(mode) {
+    driveMode = mode;
+    engine.setNeutral(mode === 'n');
+    if (mode !== 'n') engine.setRevDemand(0);
+    $('mode-n').classList.toggle('active', mode === 'n');
+    $('mode-d').classList.toggle('active', mode === 'd');
+  }
+  $('mode-n').addEventListener('click', () => setDriveMode('n'));
+  $('mode-d').addEventListener('click', () => setDriveMode('d'));
 
   function setupPedal(elPedal, key) {
     const apply = (e) => {
@@ -205,7 +217,11 @@
    */
   function updatePedalPhysics(dt) {
     const max = settings.maxSpeed;
-    const gasAccel = pedals.gas * 26 * (1 - 0.68 * (pedalSpeed / max));
+    // In neutral the gas revs the engine instead of driving the wheels
+    const inGear = driveMode !== 'n';
+    if (!inGear) engine.setRevDemand(pedals.gas);
+    const gasAccel = inGear
+      ? pedals.gas * 26 * (1 - 0.68 * (pedalSpeed / max)) : 0;
     const brakeDecel = pedals.brake * 55;
     const drag = pedalSpeed > 0 ? 1.2 + 2.4 * (pedalSpeed / max) : 0;
     pedalSpeed += (gasAccel - brakeDecel - drag) * dt;

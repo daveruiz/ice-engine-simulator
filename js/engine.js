@@ -62,6 +62,34 @@ class EngineSim {
     this.aggressiveness = 0; // 0 relaxed .. 1 sporty (driver style estimate)
     this.braking = false;    // true under hard deceleration
     this.kickdownInhibit = 0; // no kickdown right after an upshift (no hunting)
+    this.neutral = false;    // true = drivetrain disconnected (free rev)
+    this.revDemand = 0;      // 0..1 accelerator position while in neutral
+  }
+
+  /**
+   * Engage/disengage neutral. In neutral the engine free-revs from
+   * `revDemand` and the wheels are disconnected. Re-engaging drive
+   * picks the highest gear that doesn't lug at the current speed.
+   */
+  setNeutral(on) {
+    on = !!on;
+    if (this.neutral === on) return;
+    this.neutral = on;
+    if (!on) {
+      let g = 1;
+      for (let i = this.cfg.gears; i >= 1; i--) {
+        if (this.rpmInGear(this.speed, i - 1) >= this.cfg.shiftDownRpm * 1.2) {
+          g = i;
+          break;
+        }
+      }
+      this.gear = g;
+    }
+  }
+
+  /** Accelerator position (0..1) used to rev the engine while in neutral. */
+  setRevDemand(x) {
+    this.revDemand = Math.max(0, Math.min(1, x));
   }
 
   /** RPM the engine would turn at `speed` in gear index `g` (0-based). */
@@ -114,21 +142,26 @@ class EngineSim {
     this.braking = this.accel < -5;
 
     // --- throttle / load estimate ---
-    // Cruise needs a little throttle (~ speed dependent), accelerating
-    // needs a lot, decelerating means closed throttle (engine braking).
+    // Neutral: the accelerator position IS the load (free revving).
+    // In gear: cruise needs a little throttle (~ speed dependent),
+    // accelerating a lot, decelerating means closed throttle.
     let load;
-    if (this.speed < 0.5 && Math.abs(this.accel) < 0.5) {
+    if (this.neutral) {
+      load = this.revDemand;
+    } else if (this.speed < 0.5 && Math.abs(this.accel) < 0.5) {
       load = 0; // idle
     } else {
       const cruise = 0.12 + 0.18 * (this.speed / cfg.maxSpeed);
       load = cruise + this.accel / 14;
     }
     load = Math.max(0, Math.min(1, load));
-    this.throttle += (load - this.throttle) * Math.min(1, dt / 0.12);
+    this.throttle += (load - this.throttle) * Math.min(1, dt / (this.neutral ? 0.08 : 0.12));
 
     // --- gear selection (mimics driver / automatic gearbox behavior) ---
     this.kickdownInhibit = Math.max(0, this.kickdownInhibit - dt);
-    if (this.shiftTimer > 0) {
+    if (this.neutral) {
+      // drivetrain disconnected: no shifting
+    } else if (this.shiftTimer > 0) {
       this.shiftTimer -= dt;
     } else {
       const g = this.gear - 1;
@@ -181,16 +214,21 @@ class EngineSim {
       }
     }
 
-    // --- rpm: chase the geometric value for the current gear ---
-    let targetRpm = this.rpmInGear(this.speed, this.gear - 1);
-    let tau = 0.09; // engine responds fast
-    if (this.shiftTimer > 0) {
-      tau = 0.16;   // rev fall/rise across a shift is a bit slower
+    // --- rpm: free-rev in neutral, else chase the current gear ratio ---
+    let targetRpm, tau;
+    if (this.neutral) {
+      targetRpm = cfg.idleRpm +
+        Math.pow(this.revDemand, 1.3) * (cfg.maxRpm - cfg.idleRpm);
+      // an unloaded engine revs up fast and falls back slower
+      tau = targetRpm > this.rpm ? 0.14 : 0.35;
+    } else {
+      targetRpm = this.rpmInGear(this.speed, this.gear - 1);
+      tau = this.shiftTimer > 0 ? 0.16 : 0.09;
     }
     this.rpm += (targetRpm - this.rpm) * Math.min(1, dt / tau);
 
     // Idle jitter: a standing engine never sits perfectly still
-    if (this.speed < 0.5) {
+    if (this.speed < 0.5 && this.rpm < cfg.idleRpm * 1.4) {
       this.rpm += (Math.random() - 0.5) * 12;
       this.rpm = Math.max(cfg.idleRpm * 0.95, this.rpm);
     }
@@ -211,8 +249,9 @@ class EngineSim {
     return this.shiftTimer > 0;
   }
 
-  /** Displayed gear: N at standstill, otherwise 1..N. */
+  /** Displayed gear: N in neutral or at standstill, otherwise 1..N. */
   get displayGear() {
+    if (this.neutral) return 'N';
     return this.speed < 0.5 && this.targetSpeed < 0.5 ? 'N' : String(this.gear);
   }
 }

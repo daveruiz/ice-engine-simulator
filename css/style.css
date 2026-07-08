@@ -262,6 +262,30 @@ html, body {
   background: linear-gradient(180deg, rgba(255,45,58,0.15), rgba(255,45,58,0.55));
 }
 .pedal.pressed { border-color: var(--dim); }
+/* N/D gear selector between the pedals */
+#gear-selector {
+  flex: 0 0 clamp(56px, 9vw, 84px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mode-btn {
+  flex: 1;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  color: var(--dim);
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mode-btn.active {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+  box-shadow: 0 0 14px rgba(47, 208, 255, 0.25) inset;
+}
+
 .pedal-label {
   position: absolute;
   top: 50%; left: 50%;

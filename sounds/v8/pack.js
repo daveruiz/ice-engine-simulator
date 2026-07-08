@@ -52,12 +52,14 @@ window.ENGINE_SOUND_PACK = {
   gasFull: { file: 'on_1900.mp3', rpm: 1900, volume: 1.0 },
 
   // --- Gas: half throttle / cruise (set to null if you have no clip) -
-  // gasHalf: { file: 'half_2500.mp3', rpm: 2500, volume: 1.0 },
-  gasHalf: null,
+  // Reusing the full-throttle clip a bit quieter until a dedicated
+  // partial-throttle recording exists.
+  gasHalf: { file: 'on_1900.mp3', rpm: 1900, volume: 0.8 },
 
   // --- Gas: released / overrun (set to null if you have no clip) ----
-  // gasRelease: { file: 'release_2000.mp3', rpm: 2000, volume: 0.9 },
-  gasRelease: null,
+  // Reusing the idle clip: pitched up to the current RPM its lopey
+  // rumble works as a coasting/overrun burble.
+  gasRelease: { file: 'idle.mp3', rpm: 750, volume: 0.85 },
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
   params: {
