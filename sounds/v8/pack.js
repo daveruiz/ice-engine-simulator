@@ -46,22 +46,20 @@ window.ENGINE_SOUND_PACK = {
   start: null,
 
   // --- Idle loop (standstill) ---------------------------------------
-  // Steady segment cut from the long idle recording (~73 Hz firing
-  // frequency measured => ~1100 RPM on a V8).
-  idle: { file: 'idle.wav', rpm: 1100, volume: 0.75 },
+  // Measured firing frequency ~69 Hz => ~1030 RPM on a V8.
+  idle: { file: 'idle.wav', rpm: 1030, volume: 0.75 },
 
   // --- Gas: full throttle (REQUIRED) --------------------------------
   // Measured firing frequency ~180 Hz => ~2700 RPM.
   gasFull: { file: 'gas_full.ogg', rpm: 2700, volume: 1.0 },
 
   // --- Gas: half throttle / cruise (set to null if you have no clip) -
-  // Reusing the full-throttle clip a bit quieter until a dedicated
-  // partial-throttle recording exists.
-  gasHalf: { file: 'gas_full.ogg', rpm: 2700, volume: 0.8 },
+  // Intentionally shares the same recording as gasRelease (one file on
+  // disk, two slots pointing at it), a bit louder here.
+  gasHalf: { file: 'gas_release.wav', rpm: 1100, volume: 0.95 },
 
   // --- Gas: released / overrun (set to null if you have no clip) ----
-  // A different steady segment of the idle recording, so coasting
-  // doesn't sound identical to standstill.
+  // Steady segment cut from the long recording (~73 Hz => ~1100 RPM).
   gasRelease: { file: 'gas_release.wav', rpm: 1100, volume: 0.85 },
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
