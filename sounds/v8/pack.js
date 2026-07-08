@@ -67,10 +67,15 @@ window.ENGINE_SOUND_PACK = {
   // disk, two slots pointing at it), a bit louder here.
   gasHalf: { file: 'gas_release.wav', rpm: 2200, volume: 0.95 },
 
-  // --- Gas: released / overrun (set to null if you have no clip) ----
-  // Steady segment cut from the long recording. rpm doubled vs the
-  // measured ~73 Hz (2nd harmonic lock) — sounds right an octave lower.
-  gasRelease: { file: 'gas_release.wav', rpm: 2200, volume: 0.85 },
+  // --- Gas: released / overrun -------------------------------------
+  // oneShot: true => fired ONCE when you lift off the gas (a decel
+  // burble), instead of looping. After it plays, the sustained sound
+  // settles into gasHalf (coasting/partial) or idle (low revs) on its
+  // own. Omit oneShot (or set false) to loop it as a steady overrun bed.
+  //   duration: seconds to play of the clip as the one-shot (a long
+  //             loop file still works as a short lift burble).
+  gasRelease: { file: 'gas_release.wav', rpm: 2200, volume: 0.9,
+    oneShot: true, duration: 0.9 },
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
   params: {

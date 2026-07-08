@@ -23,7 +23,7 @@ its `pack.js`, and add an entry in `engines.js`.
 | `idle` | yes | at standstill / idle RPM (optional) |
 | `gasFull` | yes | full throttle — **required** |
 | `gasHalf` | yes | partial throttle / cruising (optional) |
-| `gasRelease` | yes | throttle released — coasting / overrun (optional) |
+| `gasRelease` | loop or one-shot | throttle released — coasting / overrun (optional). With `oneShot: true` it fires *once* on lift-off (a decel burble) and the bed then settles into `gasHalf`/`idle`; add `duration` (seconds) to cap the one-shot length |
 
 The gas slots crossfade by engine load (`gasRelease → gasHalf → gasFull`),
 and each loop is pitch-shifted to the current RPM using its `rpm` field as

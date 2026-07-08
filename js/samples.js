@@ -79,6 +79,8 @@ class SampleEngineSound {
       slots[key] = {
         rpm: slot.rpm || 0,
         volume: slot.volume == null ? 1 : slot.volume,
+        oneShot: !!slot.oneShot,
+        duration: slot.duration || 0,
         data: await r.arrayBuffer(),
       };
     }
@@ -134,13 +136,22 @@ class SampleEngineSound {
       return { rpm: slot.rpm, volume: slot.volume, source, gain, norm: seam.norm };
     };
 
+    // gasRelease can be a sustained loop OR a one-shot fired on lift-off.
+    // As a one-shot it leaves the sustained ladder (idle/gasHalf take over).
+    const rel = decoded.gasRelease;
+    const relOneShot = rel && rel.oneShot;
+
     this.b = {
       idle: decoded.idle ? makeLoop(decoded.idle, this.master) : null,
       gasFull: makeLoop(decoded.gasFull, this.gasFilter),
       gasHalf: decoded.gasHalf ? makeLoop(decoded.gasHalf, this.gasFilter) : null,
-      gasRelease: decoded.gasRelease ? makeLoop(decoded.gasRelease, this.master) : null,
+      gasRelease: (rel && !relOneShot) ? makeLoop(rel, this.master) : null,
     };
     this.startShot = decoded.start || null;
+    this.releaseShot = relOneShot
+      ? { buffer: rel.buffer, volume: rel.volume, rpm: rel.rpm || 1, duration: rel.duration }
+      : null;
+    this.releaseArmed = false; // lift-off edge detector
 
     // Overrun pops: use the pack's pop recording if provided, otherwise
     // a procedurally generated pop.
@@ -176,6 +187,28 @@ class SampleEngineSound {
     src.start();
   }
 
+  /** Fire the gasRelease one-shot, pitched to the current RPM. */
+  _playRelease(rpm, t) {
+    const P = this.pack.params;
+    const rs = this.releaseShot;
+    const src = this.ctx.createBufferSource();
+    src.buffer = rs.buffer;
+    const rate = SampleEngineSound._clamp((rpm / rs.rpm) * P.pitch, P.minPitch, P.maxPitch);
+    src.playbackRate.value = rate;
+    // Cap length (a long loop file still works as a short lift burble)
+    const natural = rs.buffer.duration / rate;
+    const dur = rs.duration > 0 ? rs.duration : Math.min(natural, 1.2);
+    const vol = Math.max(0.0001, rs.volume * P.masterVolume);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.setValueAtTime(vol, t + dur * 0.45);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(g);
+    g.connect(this.master);
+    src.start(t);
+    src.stop(t + dur + 0.05);
+  }
+
   /** Same interface as the synth engine — call every frame. */
   update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir) {
     if (!this.running || !this.ctx) return;
@@ -192,6 +225,16 @@ class SampleEngineSound {
     const rpmNorm = Math.min(1, rpm / maxRpm);
 
     if (this.pops) this.pops.update(t, throttle, rpmNorm, shifting, shiftDir);
+
+    // gasRelease one-shot: fire once each time the throttle is lifted,
+    // then the sustained bed settles into idle / gasHalf on its own.
+    if (this.releaseShot && !shifting) {
+      if (throttle > 0.45) this.releaseArmed = true;
+      else if (throttle < 0.22 && this.releaseArmed) {
+        this.releaseArmed = false;
+        this._playRelease(rpm, t);
+      }
+    }
 
     // Idle loop takes over at the bottom of the rev range
     const idleBlend = this.b.idle
