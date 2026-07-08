@@ -27,10 +27,12 @@
 
   const engine = new EngineSim(engineConfig());
 
-  // Sound engines: the built-in synth plus any sample packs registered
+  // Sound engines: the built-in synth, the physically modeled engine
+  // (js/physical.js, tuned in tuner.html) plus any sample packs registered
   // in sounds/engines.js (one folder per engine, each with a pack.js).
   // Packs are loaded lazily the first time they're selected.
   const synthSound = new EngineSound();
+  const physicalSound = new PhysicalEngineSound();
   let soundLibrary = [];         // entries from sounds/engines.js
   const packEngines = new Map(); // id -> SampleEngineSound | null (failed)
   let sound = synthSound;        // active engine
@@ -132,9 +134,11 @@
     });
   }
 
-  /** Library entry for the current setting ('synth' resolves to null). */
+  /** Library entry for the current setting (built-ins resolve to null). */
   function resolveSoundChoice() {
-    if (settings.soundSet === 'synth') return null;
+    if (settings.soundSet === 'synth' || settings.soundSet === 'physical') {
+      return null;
+    }
     return soundLibrary.find((e) => e.id === settings.soundSet)
       || soundLibrary[0] || null;
   }
@@ -158,7 +162,12 @@
     const entry = resolveSoundChoice();
     let next = synthSound;
     let note = 'Built-in synthesized engine.';
-    if (entry) {
+    if (settings.soundSet === 'physical') {
+      next = physicalSound;
+      note = 'Physically modeled engine (cylinders, waveguides, muffler…). ' +
+        'Shape it in the <a href="tuner.html">engine tuner</a> — ' +
+        'the cylinder count lives there, not in the slider above.';
+    } else if (entry) {
       const eng = await ensurePackEngine(entry);
       if (token !== soundSwapToken) return; // superseded by a newer choice
       if (eng) {
@@ -170,7 +179,7 @@
           '" failed to load — using the synthesized engine.';
       }
     }
-    $('soundset-hint').textContent = note;
+    $('soundset-hint').innerHTML = note;
     if (next === sound) return;
     const wasOn = engineOn;
     if (wasOn) stopEngine();
@@ -189,12 +198,17 @@
       o.textContent = e.name;
       sel.appendChild(o);
     }
+    const op = document.createElement('option');
+    op.value = 'physical';
+    op.textContent = 'Physical model (V8 preset)';
+    sel.appendChild(op);
     const o = document.createElement('option');
     o.value = 'synth';
     o.textContent = 'Synthesized (built-in)';
     sel.appendChild(o);
     const entry = resolveSoundChoice();
-    sel.value = entry ? entry.id : 'synth';
+    sel.value = settings.soundSet === 'physical'
+      ? 'physical' : (entry ? entry.id : 'synth');
   }
 
   async function loadSoundLibrary() {
@@ -441,7 +455,13 @@
   let engineOn = false;
 
   async function startEngine() {
-    await sound.start();
+    try {
+      await sound.start();
+    } catch (err) {
+      $('soundset-hint').textContent =
+        'Sound engine failed to start: ' + err.message;
+      return;
+    }
     sound.setVolume(settings.volume / 100);
     engineOn = true;
     el.engineToggle.textContent = '■ STOP ENGINE';
