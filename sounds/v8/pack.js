@@ -45,6 +45,14 @@ window.ENGINE_SOUND_PACK = {
   // start: { file: 'start.mp3', volume: 1.0 },
   start: null,
 
+  // --- One-shot exhaust pop (overrun crackle, shift bangs) -----------
+  // Played with random pitch/level on throttle lift-off at revs, on
+  // full-throttle upshifts and on downshifts. Without a file, a
+  // synthesized pop is used. Disable entirely with `pops: false` in
+  // params below.
+  // pop: { file: 'pop.ogg', volume: 1.0 },
+  pop: null,
+
   // --- Idle loop (standstill) ---------------------------------------
   // rpm doubled vs the measured ~69 Hz: the analyzer locked onto the
   // 2nd harmonic, and the clip sounds right one octave lower.
@@ -97,5 +105,11 @@ window.ENGINE_SOUND_PACK = {
     filterMinHz: 260,
     filterLoadHz: 4200,
     filterRpmHz: 2200,
+
+    // Exhaust pops:
+    pops: true,      // false = no pops at all
+    popVolume: 0.6,  // loudness of each pop
+    popChance: 0.7,  // 0..1 how likely/dense the overrun crackle is
+    popWindow: 1.8,  // seconds of crackle after lifting off the gas
   },
 };

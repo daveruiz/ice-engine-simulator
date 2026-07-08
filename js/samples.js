@@ -44,6 +44,10 @@ class SampleEngineSound {
       filterMinHz: 260,
       filterLoadHz: 4200,
       filterRpmHz: 2200,
+      pops: true,
+      popVolume: 0.6,
+      popChance: 0.7,
+      popWindow: 1.8,
     };
   }
 
@@ -67,7 +71,7 @@ class SampleEngineSound {
 
     const params = Object.assign(SampleEngineSound.defaultParams(), def.params);
     const slots = {};
-    for (const key of ['start', 'idle', 'gasFull', 'gasHalf', 'gasRelease']) {
+    for (const key of ['start', 'idle', 'gasFull', 'gasHalf', 'gasRelease', 'pop']) {
       const slot = def[key];
       if (!slot || !slot.file) continue;
       const r = await fetch(baseUrl + slot.file);
@@ -138,6 +142,16 @@ class SampleEngineSound {
     };
     this.startShot = decoded.start || null;
 
+    // Overrun pops: use the pack's pop recording if provided, otherwise
+    // a procedurally generated pop.
+    this.pops = this.pack.params.pops ? new ExhaustPops(ctx, this.master, {
+      buffer: decoded.pop ? decoded.pop.buffer : ExhaustPops.makeBuffer(ctx),
+      volume: this.pack.params.popVolume *
+        (decoded.pop ? decoded.pop.volume : 1),
+      chance: this.pack.params.popChance,
+      window: this.pack.params.popWindow,
+    }) : null;
+
     if (this.startShot) this._playShot(this.startShot);
     this.master.gain.setTargetAtTime(this.volume, t, 0.3);
     this.running = true;
@@ -176,6 +190,8 @@ class SampleEngineSound {
       load = shiftDir < 0 ? Math.max(throttle, 0.55) : throttle * 0.15;
     }
     const rpmNorm = Math.min(1, rpm / maxRpm);
+
+    if (this.pops) this.pops.update(t, throttle, rpmNorm, shifting, shiftDir);
 
     // Idle loop takes over at the bottom of the rev range
     const idleBlend = this.b.idle

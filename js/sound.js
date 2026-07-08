@@ -11,6 +11,96 @@
  * brightness, which is what makes on/off-throttle sound so different
  * in a real car.
  */
+/**
+ * ExhaustPops — fires overrun pops/crackles like a sporty exhaust.
+ * Shared by both sound engines. Triggers:
+ *   - throttle lift-off at revs: opens a crackle window (~2s) with
+ *     randomly spaced pops, denser and more likely at higher RPM
+ *   - full-throttle upshift: single loud pop between gears
+ *   - downshift blip: occasional pop
+ * Plays a provided one-shot buffer (a real recording from the pack) or
+ * a procedurally generated pop, with random pitch/level per shot.
+ */
+class ExhaustPops {
+  /**
+   * @param {AudioContext} ctx
+   * @param {AudioNode} dest
+   * @param {object} opts { buffer, volume, chance, window }
+   */
+  constructor(ctx, dest, opts) {
+    this.ctx = ctx;
+    this.dest = dest;
+    this.buffer = opts.buffer;
+    this.volume = opts.volume != null ? opts.volume : 0.6;
+    this.chance = opts.chance != null ? opts.chance : 0.7;
+    this.window = opts.window != null ? opts.window : 1.8;
+    this.prevLoad = 0;      // slow copy of load — high right after a lift
+    this.wasShifting = false;
+    this.overrunUntil = 0;
+    this.nextAt = 0;
+    this.fired = 0;         // counter (handy for tests/debug)
+  }
+
+  /** Call every frame with the *raw* engine load (not the shift-cut one). */
+  update(now, load, rpmNorm, shifting, shiftDir) {
+    // Lift-off at revs opens the crackle window
+    if (this.prevLoad > 0.55 && load < 0.3 && rpmNorm > 0.3) {
+      this.overrunUntil = now + this.window * (0.6 + rpmNorm);
+      this.nextAt = now + 0.05 + Math.random() * 0.12;
+    }
+    // Gear-shift pops
+    if (shifting && !this.wasShifting) {
+      if (shiftDir > 0 && this.prevLoad > 0.7 && Math.random() < 0.6 * this.chance) {
+        this._fire(0.9);
+      } else if (shiftDir < 0 && rpmNorm > 0.25 && Math.random() < 0.4 * this.chance) {
+        this._fire(0.55);
+      }
+    }
+    // Random crackle while the overrun window is open
+    if (now < this.overrunUntil && load < 0.3 && now >= this.nextAt) {
+      if (Math.random() < this.chance) {
+        this._fire(0.3 + Math.random() * 0.55);
+      }
+      this.nextAt = now + 0.09 + Math.random() * (0.2 + (1 - rpmNorm) * 0.3);
+    }
+    this.wasShifting = shifting;
+    // Slow memory of load: stays high ~0.3s after a sudden lift
+    this.prevLoad += (load - this.prevLoad) * 0.12;
+  }
+
+  _fire(intensity) {
+    if (!this.buffer) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buffer;
+    src.playbackRate.value = 0.8 + Math.random() * 0.5;
+    const g = this.ctx.createGain();
+    g.gain.value = intensity * this.volume;
+    src.connect(g);
+    g.connect(this.dest);
+    src.start();
+    this.fired++;
+  }
+
+  /** Procedural pop: filtered noise crack + a low thump, ~180ms. */
+  static makeBuffer(ctx) {
+    const sr = ctx.sampleRate;
+    const n = Math.floor(sr * 0.18);
+    const buf = ctx.createBuffer(1, n, sr);
+    const d = buf.getChannelData(0);
+    let lp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      lp += 0.25 * ((Math.random() * 2 - 1) - lp);
+      const crack = lp * Math.exp(-t / 0.03);
+      const thump = Math.sin(2 * Math.PI * 75 * t) * Math.exp(-t / 0.06) * 0.8;
+      d[i] = Math.tanh((crack * 2.2 + thump) * 1.4) * 0.9;
+    }
+    return buf;
+  }
+}
+
+window.ExhaustPops = ExhaustPops;
+
 class EngineSound {
   constructor() {
     this.ctx = null;
@@ -123,6 +213,14 @@ class EngineSound {
     this.noiseGain.connect(this.master);
     this.noise.start(t);
 
+    // Overrun pops (procedural pop sound)
+    this.pops = new ExhaustPops(ctx, this.master, {
+      buffer: ExhaustPops.makeBuffer(ctx),
+      volume: 0.5,
+      chance: 0.7,
+      window: 1.6,
+    });
+
     // Fade master in
     this.master.gain.setTargetAtTime(this.volume, t, 0.4);
   }
@@ -154,6 +252,8 @@ class EngineSound {
 
     const firing = (rpm / 60) * (cylinders / 2);
     const rpmNorm = Math.min(1, rpm / maxRpm);
+
+    this.pops.update(t, throttle, rpmNorm, shifting, shiftDir);
 
     // Upshift: torque cut (throttle momentarily closed).
     // Downshift: rev-match blip (a stab of throttle to raise the revs).

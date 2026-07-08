@@ -19,6 +19,7 @@ its `pack.js`, and add an entry in `engines.js`.
 | slot | looped | plays when |
 | --- | --- | --- |
 | `start` | no | once, when the engine starts (optional) |
+| `pop` | no | exhaust pop one-shot — fired with random pitch/level on lift-off overrun, full-throttle upshifts and downshifts; a synthesized pop is used if omitted (optional; `pops: false` in params disables) |
 | `idle` | yes | at standstill / idle RPM (optional) |
 | `gasFull` | yes | full throttle — **required** |
 | `gasHalf` | yes | partial throttle / cruising (optional) |
