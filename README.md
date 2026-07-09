@@ -142,6 +142,7 @@ user gesture before audio can play).
 | Shift-up / shift-down RPM | configurable with hysteresis guard |
 | Max speed | 120 – 400 km/h |
 | Volume | 0 – 100% |
+| Start sound volume | 0 – 200% (relative to volume) |
 
 New installs default to **GPS** input and the **physical** engine sound.
 Settings persist in `localStorage`. The physical model has its own deep

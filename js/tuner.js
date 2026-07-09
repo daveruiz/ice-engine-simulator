@@ -145,6 +145,7 @@
     }
     try {
       await sound.start();
+      sound.fadeIn(0, 0.3); // start() now leaves the master silent
     } catch (err) {
       alert('Could not start audio: ' + err.message);
       return;

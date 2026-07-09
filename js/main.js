@@ -32,6 +32,7 @@
     revUpTime: 0.55,    // neutral rev-up time constant (s)
     revDownTime: 0.85,  // neutral rev-down time constant (s)
     volume: 70,
+    startVolume: 150,   // ignition clip level, % relative to master volume
     soundSet: 'physical', // 'synth' | 'physical' | a pack id | 'auto'
   };
 
@@ -459,6 +460,7 @@
     ['set-revup', 'out-revup', 'revUpTime', (v) => v.toFixed(2) + 's'],
     ['set-revdown', 'out-revdown', 'revDownTime', (v) => v.toFixed(2) + 's'],
     ['set-volume', 'out-volume', 'volume', (v) => v + '%'],
+    ['set-startvol', 'out-startvol', 'startVolume', (v) => v + '%'],
   ];
 
   function syncSettingsUI() {
@@ -537,13 +539,14 @@
   // key is turned. Timed to the recording: it cranks, then the engine
   // "catches" ~0.8 s in — that's when the generated engine swells up under
   // the sample's settling tail.
-  const STARTER_URL = 'sounds/start.ogg?v=23';
+  const STARTER_URL = 'sounds/start.ogg?v=24';
   const STARTER_CATCH = 0.8;   // s: engine fires in the recording
   const STARTER_FADE = 0.55;   // s: generated engine swell-in
+  const STARTER_CRANK_RPM = 260; // needle sits here while the starter cranks
   const SHUTDOWN_TIME = 1.3;   // s: revs wind down to a halt on key-off
   let starterBytes = null;     // cached raw file (fetched once)
 
-  async function playStarter(ctx, volume) {
+  async function playStarter(ctx) {
     try {
       if (!starterBytes) {
         starterBytes = await (await fetch(STARTER_URL)).arrayBuffer();
@@ -553,9 +556,19 @@
       const src = ctx.createBufferSource();
       src.buffer = buf;
       const g = ctx.createGain();
-      g.gain.value = volume;
+      // Own level (Settings → Start sound volume), scaled by master so an
+      // overall mute still applies. Can boost past unity — a limiter below
+      // catches the peaks so the clip stays clean.
+      g.gain.value = (settings.volume / 100) * (settings.startVolume / 100);
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -2;
+      limiter.knee.value = 4;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.12;
       src.connect(g);
-      g.connect(ctx.destination);
+      g.connect(limiter);
+      limiter.connect(ctx.destination);
       src.start();
     } catch (e) { /* starter is cosmetic — never block the engine on it */ }
   }
@@ -578,7 +591,7 @@
     engineOn = true;
     el.engineToggle.textContent = '■ STOP ENGINE';
     if (withStarter && sound.ctx) {
-      playStarter(sound.ctx, settings.volume / 100);
+      playStarter(sound.ctx);
       sound.fadeIn(STARTER_CATCH, STARTER_FADE); // swell in as the engine catches
       cranking = { elapsed: 0 };
     } else {
@@ -651,14 +664,19 @@
       if (p >= 1) { shutdown.snd.stop(); shutdown = null; }
     } else if (engineOn) {
       if (cranking) {
-        // Starter is cranking: hold the needle low and let it swing up to
-        // idle as the engine catches (the audio is the recorded clip; the
-        // generated engine is still silent until fadeIn opens the master).
+        // Match the needle to the recording: it sits low while the starter
+        // cranks, then sweeps up to idle only once the engine catches (~0.8s)
+        // — in step with the generated engine swelling in, not before it.
         cranking.elapsed += dt;
-        const p = Math.min(1, cranking.elapsed / STARTER_CATCH);
-        const ease = p * p * (3 - 2 * p); // smoothstep
-        dispRpm = settings.idleRpm * 0.9 * ease;
-        if (cranking.elapsed >= STARTER_CATCH) cranking = null;
+        const e = cranking.elapsed;
+        if (e < STARTER_CATCH) {
+          dispRpm = STARTER_CRANK_RPM * (0.85 + 0.15 * Math.sin(e * 22)); // uneven cranking
+        } else {
+          const t2 = Math.min(1, (e - STARTER_CATCH) / STARTER_FADE);
+          const ease = t2 * t2 * (3 - 2 * t2); // smoothstep
+          dispRpm = STARTER_CRANK_RPM + (settings.idleRpm - STARTER_CRANK_RPM) * ease;
+          if (t2 >= 1) cranking = null;
+        }
       } else {
         dispRpm = engine.rpm;
         dispGear = engine.displayGear;
