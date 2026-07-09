@@ -131,7 +131,15 @@
     sound.setVolume(settings.volume / 100);
     setSource(settings.source);
     setActiveSound();
+    updateSoundVisibility();
     saveSettings();
+  }
+
+  // Cylinders only shapes the built-in synth; the tuner only applies to the
+  // physical model — show each control only for the sound engine it affects.
+  function updateSoundVisibility() {
+    $('row-cylinders').classList.toggle('hidden', settings.soundSet !== 'synth');
+    $('row-tuner').classList.toggle('hidden', settings.soundSet !== 'physical');
   }
 
   // ---------- Sound engine selection ----------
