@@ -148,6 +148,7 @@ user gesture before audio can play).
 | ------------------------------ | ------------------------------------------- |
 | Speed source                   | Manual slider / Pedals / GPS                |
 | Units                          | km/h / mph                                  |
+| Speed smoothing                | 0.05 – 1.5 s (lower = snappier vs GPS)      |
 | Engine sound                   | Physical model / Synthesized / sample packs |
 | Max RPM                        | 4,000 – 12,000                              |
 | Idle RPM                       | 500 – 1,500                                 |

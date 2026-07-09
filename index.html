@@ -23,7 +23,7 @@
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
   <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-  <link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="stylesheet" href="css/style.css?v=28" />
 </head>
 
 <body>
@@ -137,6 +137,12 @@
           <option value="mph">mph</option>
         </select>
       </div>
+      <div class="setting-row">
+        <label for="set-speedsmooth">Speed smoothing <output id="out-speedsmooth"></output></label>
+        <input type="range" id="set-speedsmooth" min="0.05" max="1.5" step="0.05">
+        <p class="hint">Lower reacts faster to speed changes (less lag behind GPS);
+        raise it if your GPS updates slowly and the reading jumps.</p>
+      </div>
 
       <h3>Engine</h3>
       <div class="setting-row">
@@ -212,13 +218,13 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=26"></script>
-  <script src="js/sound.js?v=26"></script>
-  <script src="js/samples.js?v=26"></script>
-  <script src="js/physical-params.js?v=26"></script>
-  <script src="js/physical.js?v=26"></script>
-  <script src="js/dashboard.js?v=26"></script>
-  <script src="js/main.js?v=26"></script>
+  <script src="js/engine.js?v=28"></script>
+  <script src="js/sound.js?v=28"></script>
+  <script src="js/samples.js?v=28"></script>
+  <script src="js/physical-params.js?v=28"></script>
+  <script src="js/physical.js?v=28"></script>
+  <script src="js/dashboard.js?v=28"></script>
+  <script src="js/main.js?v=28"></script>
 </body>
 
 </html>

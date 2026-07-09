@@ -28,6 +28,8 @@ class EngineSim {
         firstGearFrac: 0.19, // fraction of maxSpeed reachable in 1st gear
         revUpTime: 0.55, // neutral free-rev: time constant climbing (s)
         revDownTime: 0.85, // neutral free-rev: time constant falling (s)
+        speedSmoothing: 0.3, // s: how hard the displayed speed chases the input
+        // (small = snappy, less lag behind GPS; large = smooth over sparse fixes)
       },
       config,
     );
@@ -130,7 +132,9 @@ class EngineSim {
     const diff = this.targetSpeed - this.speed;
     const maxAccel = 22 * (1 - 0.7 * (this.speed / cfg.maxSpeed)); // km/h/s
     const maxBrake = 45;
-    let rate = diff * 1.2; // proportional chase
+    // Proportional chase toward the input; the time constant is configurable
+    // (Settings → Speed smoothing) so the lag behind GPS can be dialed in.
+    let rate = diff / Math.max(0.02, cfg.speedSmoothing);
     rate = Math.max(-maxBrake, Math.min(rate, maxAccel));
     this.speed = Math.max(0, this.speed + rate * dt);
 

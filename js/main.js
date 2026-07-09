@@ -31,6 +31,7 @@
     maxSpeed: 250, // always stored in km/h
     revUpTime: 0.55, // neutral rev-up time constant (s)
     revDownTime: 0.85, // neutral rev-down time constant (s)
+    speedSmoothing: 0.3, // s: speed-follow lag (lower = snappier vs GPS)
     volume: 70,
     startVolume: 150, // ignition clip level, % relative to master volume
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
@@ -120,6 +121,7 @@
       shiftDownRpm: settings.shiftDownRpm,
       revUpTime: settings.revUpTime,
       revDownTime: settings.revDownTime,
+      speedSmoothing: settings.speedSmoothing,
     };
   }
 
@@ -525,6 +527,7 @@
     ["set-shiftup", "out-shiftup", "shiftUpRpm", (v) => v],
     ["set-shiftdown", "out-shiftdown", "shiftDownRpm", (v) => v],
     ["set-maxspeed", "out-maxspeed", "maxSpeed", (v) => v],
+    ["set-speedsmooth", "out-speedsmooth", "speedSmoothing", (v) => v.toFixed(2) + "s"],
     ["set-revup", "out-revup", "revUpTime", (v) => v.toFixed(2) + "s"],
     ["set-revdown", "out-revdown", "revDownTime", (v) => v.toFixed(2) + "s"],
     ["set-volume", "out-volume", "volume", (v) => v + "%"],
