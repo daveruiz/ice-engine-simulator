@@ -543,6 +543,11 @@
   const STARTER_CATCH = 0.8;   // s: engine fires in the recording
   const STARTER_FADE = 0.55;   // s: generated engine swell-in
   const STARTER_CRANK_RPM = 260; // needle sits here while the starter cranks
+  // On catch the revs flare up and settle back to idle, matching the sample's
+  // rev peak (~1.0 s) and decay. Times are measured from the catch.
+  const STARTER_FLARE_PEAK = 1.6;  // × idle rpm at the top of the blip
+  const STARTER_FLARE_RISE = 0.22; // s: catch → peak
+  const STARTER_FLARE_FALL = 0.95; // s: peak → idle
   const SHUTDOWN_TIME = 1.3;   // s: revs wind down to a halt on key-off
   let starterBytes = null;     // cached raw file (fetched once)
 
@@ -663,27 +668,41 @@
       }
       if (p >= 1) { shutdown.snd.stop(); shutdown = null; }
     } else if (engineOn) {
+      let sRpm = engine.rpm, sLoad = engine.throttle;
+      let sShift = engine.shifting, sDir = engine.shiftDir;
       if (cranking) {
-        // Match the needle to the recording: it sits low while the starter
-        // cranks, then sweeps up to idle only once the engine catches (~0.8s)
-        // — in step with the generated engine swelling in, not before it.
+        // Follow the recording: the needle sits low while the starter cranks,
+        // then on catch (~0.8s) the revs flare up and settle back to idle —
+        // and we feed that same curve to the generated engine so it blips in
+        // step with the sample instead of fading in flat.
         cranking.elapsed += dt;
         const e = cranking.elapsed;
+        const idle = settings.idleRpm;
+        let crankRpm, crankLoad = 0;
         if (e < STARTER_CATCH) {
-          dispRpm = STARTER_CRANK_RPM * (0.85 + 0.15 * Math.sin(e * 22)); // uneven cranking
+          crankRpm = STARTER_CRANK_RPM * (0.85 + 0.15 * Math.sin(e * 22)); // uneven cranking
         } else {
-          const t2 = Math.min(1, (e - STARTER_CATCH) / STARTER_FADE);
-          const ease = t2 * t2 * (3 - 2 * t2); // smoothstep
-          dispRpm = STARTER_CRANK_RPM + (settings.idleRpm - STARTER_CRANK_RPM) * ease;
-          if (t2 >= 1) cranking = null;
+          const te = e - STARTER_CATCH;
+          const peak = idle * STARTER_FLARE_PEAK;
+          if (te < STARTER_FLARE_RISE) {
+            const p = te / STARTER_FLARE_RISE;
+            crankRpm = STARTER_CRANK_RPM + (peak - STARTER_CRANK_RPM) * (p * p * (3 - 2 * p));
+          } else {
+            const p = Math.min(1, (te - STARTER_FLARE_RISE) / STARTER_FLARE_FALL);
+            crankRpm = peak + (idle - peak) * (p * p * (3 - 2 * p));
+            if (p >= 1) cranking = null;
+          }
+          crankLoad = Math.max(0, Math.min(1, (crankRpm - idle) / (peak - idle))) * 0.6;
         }
+        dispRpm = crankRpm;
+        dispThrottle = crankLoad;
+        sRpm = crankRpm; sLoad = crankLoad; sShift = false; sDir = 0;
       } else {
         dispRpm = engine.rpm;
         dispGear = engine.displayGear;
         dispThrottle = engine.throttle;
       }
-      sound.update(engine.rpm, engine.throttle, settings.maxRpm,
-        settings.cylinders, engine.shifting, engine.shiftDir);
+      sound.update(sRpm, sLoad, settings.maxRpm, settings.cylinders, sShift, sDir);
     }
 
     // Gauges
