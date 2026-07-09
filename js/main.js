@@ -9,6 +9,16 @@
   const MPH_PER_KMH = 0.621371;
   const STORAGE_KEY = 'ice-simulator-settings-v1';
 
+  // GPS noise rejection. A phone standing still doesn't report a clean 0:
+  // its fix wanders several metres between samples (and browsers that don't
+  // provide coords.speed force us to derive speed from those position deltas,
+  // which as a raw distance always reads as forward motion). Without this the
+  // car "creeps" while parked and the neutral rev-pedal decay gets cut short
+  // by a phantom re-engage. Displacement below the fix's own accuracy radius
+  // is treated as noise, and any resulting speed under the floor is a true stop.
+  const GPS_ACCURACY_FALLBACK_M = 12; // when coords.accuracy is missing
+  const GPS_SPEED_FLOOR_KMH = 3;      // below this the car is considered stopped
+
   const DEFAULTS = {
     source: 'gps',      // 'manual' | 'pedals' | 'gps'
     units: 'kmh',       // 'kmh' | 'mph'
@@ -397,17 +407,23 @@
     if (pos.coords.speed !== null && !isNaN(pos.coords.speed)) {
       speedKmh = Math.max(0, pos.coords.speed) * KMH_PER_MS;
     } else if (lastGpsPos) {
-      // Fallback: derive speed from consecutive fixes (haversine)
+      // Fallback: derive speed from consecutive fixes (haversine). Ignore
+      // displacement within the fix's accuracy radius — that's standstill
+      // jitter, not motion — so a parked car reads 0 instead of drifting up.
       const dt = (pos.timestamp - lastGpsPos.timestamp) / 1000;
       if (dt > 0.2) {
         const d = haversineMeters(
           lastGpsPos.coords.latitude, lastGpsPos.coords.longitude,
           pos.coords.latitude, pos.coords.longitude);
-        speedKmh = (d / dt) * KMH_PER_MS;
+        const noise = pos.coords.accuracy || GPS_ACCURACY_FALLBACK_M;
+        speedKmh = d > noise ? (d / dt) * KMH_PER_MS : 0;
       }
     }
     lastGpsPos = pos;
     if (speedKmh !== null) {
+      // Deadband: treat a hair of speed as a full stop so the car doesn't
+      // creep, and the neutral rev-pedal spins all the way down at a light.
+      if (speedKmh < GPS_SPEED_FLOOR_KMH) speedKmh = 0;
       engine.setTargetSpeed(speedKmh);
       el.gpsStatus.classList.add('fix');
       el.gpsStatus.classList.remove('error');
