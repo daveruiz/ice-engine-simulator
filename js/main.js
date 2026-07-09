@@ -10,7 +10,7 @@
   const STORAGE_KEY = 'ice-simulator-settings-v1';
 
   const DEFAULTS = {
-    source: 'manual',   // 'manual' | 'gps'
+    source: 'gps',      // 'manual' | 'pedals' | 'gps'
     units: 'kmh',       // 'kmh' | 'mph'
     maxRpm: 7000,
     idleRpm: 850,
@@ -19,8 +19,10 @@
     shiftUpRpm: 6200,
     shiftDownRpm: 1800,
     maxSpeed: 250,      // always stored in km/h
+    revUpTime: 0.55,    // neutral rev-up time constant (s)
+    revDownTime: 0.85,  // neutral rev-down time constant (s)
     volume: 70,
-    soundSet: 'auto',   // 'synth', a pack id, or 'auto' = first pack
+    soundSet: 'physical', // 'synth' | 'physical' | a pack id | 'auto'
   };
 
   let settings = loadSettings();
@@ -89,6 +91,8 @@
       gears: settings.gears,
       shiftUpRpm: Math.min(settings.shiftUpRpm, settings.maxRpm - 200),
       shiftDownRpm: settings.shiftDownRpm,
+      revUpTime: settings.revUpTime,
+      revDownTime: settings.revDownTime,
     };
   }
 
@@ -265,11 +269,21 @@
   $('mode-n').addEventListener('click', () => setDriveMode('n'));
   $('mode-d').addEventListener('click', () => setDriveMode('d'));
 
+  // Touch position (0 = top, 1 = bottom) -> press amount. A 0.30 floor and
+  // dead margins at the extremes (0–25% and 75–100%), which are hard to
+  // hit accurately on touch: 30% up to 25%, ramping to 100% by 75%.
+  function pedalPress(frac) {
+    const p = Math.max(0, Math.min(1, frac));
+    const MIN = 0.30, LO = 0.25, HI = 0.75;
+    if (p <= LO) return MIN;
+    if (p >= HI) return 1;
+    return MIN + (1 - MIN) * (p - LO) / (HI - LO);
+  }
+
   function setupPedal(elPedal, key) {
     const apply = (e) => {
       const rect = elPedal.getBoundingClientRect();
-      const frac = (e.clientY - rect.top) / rect.height;
-      pedals[key] = Math.max(0.1, Math.min(1, frac));
+      pedals[key] = pedalPress((e.clientY - rect.top) / rect.height);
       elPedal.style.setProperty('--press', pedals[key].toFixed(2));
       elPedal.classList.add('pressed');
     };
@@ -300,8 +314,7 @@
   function setupRevPedal(elPedal) {
     const apply = (e) => {
       const rect = elPedal.getBoundingClientRect();
-      const frac = (e.clientY - rect.top) / rect.height;
-      const press = Math.max(0.1, Math.min(1, frac));
+      const press = pedalPress((e.clientY - rect.top) / rect.height);
       elPedal.style.setProperty('--press', press.toFixed(2));
       elPedal.classList.add('pressed');
       engine.setNeutral(true);
@@ -415,6 +428,8 @@
     ['set-shiftup', 'out-shiftup', 'shiftUpRpm', (v) => v],
     ['set-shiftdown', 'out-shiftdown', 'shiftDownRpm', (v) => v],
     ['set-maxspeed', 'out-maxspeed', 'maxSpeed', (v) => v],
+    ['set-revup', 'out-revup', 'revUpTime', (v) => v.toFixed(2) + 's'],
+    ['set-revdown', 'out-revdown', 'revDownTime', (v) => v.toFixed(2) + 's'],
     ['set-volume', 'out-volume', 'volume', (v) => v + '%'],
   ];
 

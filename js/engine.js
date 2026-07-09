@@ -25,6 +25,8 @@ class EngineSim {
       shiftDownRpm: 1800,  // downshift threshold
       shiftTime: 0.30,     // seconds of torque cut while shifting
       firstGearFrac: 0.19, // fraction of maxSpeed reachable in 1st gear
+      revUpTime: 0.55,     // neutral free-rev: time constant climbing (s)
+      revDownTime: 0.85,   // neutral free-rev: time constant falling (s)
     }, config);
     this._computeGearing();
     // Reconfiguring mid-drive: the current gear must exist in the new box
@@ -65,6 +67,9 @@ class EngineSim {
     this.aggressiveness = 0; // 0 relaxed .. 1 sporty (driver style estimate)
     this.braking = false;    // true under hard deceleration
     this.kickdownInhibit = 0; // no kickdown right after an upshift (no hunting)
+    this.limiting = false;   // latched rev-limiter state (hysteresis)
+    this.limiterPhase = 0;   // rev-limiter flutter phase
+    this.sparkCut = false;   // true during a limiter fuel-cut frame
     this.neutral = false;    // true = drivetrain disconnected (free rev)
     this.revDemand = 0;      // 0..1 accelerator position while in neutral
   }
@@ -234,19 +239,38 @@ class EngineSim {
       }
     }
 
+    // --- rev limiter: fuel cut bouncing off max rpm (the "bru-bru") ---
+    // Near redline the ECU cuts injection in bursts; the revs flutter and
+    // the sound stutters (throttle momentarily closed). Latched with
+    // hysteresis so it doesn't chatter in and out.
+    if (!this.limiting && this.rpm >= cfg.maxRpm - 40) this.limiting = true;
+    else if (this.limiting && this.rpm <= cfg.maxRpm - 520) this.limiting = false;
+    if (this.limiting) {
+      this.limiterPhase += dt;
+      this.sparkCut = (this.limiterPhase % 0.13) < 0.065; // ~7.7 Hz
+    } else {
+      this.limiterPhase = 0;
+      this.sparkCut = false;
+    }
+    if (this.sparkCut) this.throttle = Math.min(this.throttle, 0.05);
+
     // --- rpm: free-rev in neutral, else chase the current gear ratio ---
     let targetRpm, tau;
     if (this.neutral) {
+      // Rev-up is non-linear (throttle^1.3) and rate-limited by the
+      // configurable time constants (flywheel inertia). Aim slightly past
+      // redline so the engine pushes into the limiter instead of creeping.
       targetRpm = cfg.idleRpm +
-        Math.pow(this.revDemand, 1.3) * (cfg.maxRpm - cfg.idleRpm);
-      // an unloaded engine revs up fast and falls back much slower
-      // (flywheel inertia — the revs hang before settling to idle)
-      tau = targetRpm > this.rpm ? 0.14 : 0.7;
+        Math.pow(this.revDemand, 1.3) * (cfg.maxRpm * 1.03 - cfg.idleRpm);
+      if (this.sparkCut) targetRpm = cfg.maxRpm - 400; // limiter cut pulls down
+      tau = this.limiting ? 0.045
+        : (targetRpm > this.rpm ? cfg.revUpTime : cfg.revDownTime);
     } else {
       targetRpm = this.rpmInGear(this.speed, this.gear - 1);
       tau = this.shiftTimer > 0 ? 0.16 : 0.09;
     }
     this.rpm += (targetRpm - this.rpm) * Math.min(1, dt / tau);
+    if (this.rpm > cfg.maxRpm) this.rpm = cfg.maxRpm; // hard rev ceiling
 
     // Idle jitter: a standing engine never sits perfectly still
     if (this.speed < 0.5 && this.rpm < cfg.idleRpm * 1.4) {
