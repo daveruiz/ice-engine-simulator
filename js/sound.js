@@ -221,8 +221,24 @@ class EngineSound {
       window: 1.6,
     });
 
-    // Fade master in
-    this.master.gain.setTargetAtTime(this.volume, t, 0.4);
+    // Master is left silent; main.js fades it in (see fadeIn) so the
+    // starter clip can crank first and the engine swell in as it catches.
+  }
+
+  /** Swell the generated engine up from silence, optionally after a delay. */
+  fadeIn(delaySec = 0, durSec = 0.4) {
+    if (!this.ctx || !this.master) return;
+    const now = this.ctx.currentTime;
+    const g = this.master.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(0, now);
+    g.setTargetAtTime(this.volume, now + delaySec, Math.max(0.01, durSec / 3));
+  }
+
+  /** Fade the generated engine down (used by the key-off spin-down). */
+  fadeOut(durSec = 0.3) {
+    if (!this.ctx || !this.master) return;
+    this.master.gain.setTargetAtTime(0, this.ctx.currentTime, Math.max(0.01, durSec / 3));
   }
 
   static _makeDistortionCurve(amount) {

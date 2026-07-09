@@ -195,11 +195,11 @@
     }
     $('soundset-hint').innerHTML = note;
     if (next === sound) return;
-    const wasOn = engineOn;
-    if (wasOn) stopEngine();
+    const wasOn = engineOn || !!cranking;
+    if (wasOn) stopEngine({ spinDown: false });
     sound = next;
     sound.setVolume(settings.volume / 100);
-    if (wasOn) await startEngine();
+    if (wasOn) await startEngine({ withStarter: false });
   }
 
   /** Rebuild the Engine dropdown from the library + built-in synth. */
@@ -530,8 +530,44 @@
 
   // ---------- Engine start/stop ----------
   let engineOn = false;
+  let cranking = null;   // { elapsed } while the starter clip cranks
+  let shutdown = null;   // { snd, elapsed, rpm0, faded } during key-off spin-down
 
-  async function startEngine() {
+  // Shared starter (ignition) clip, played for every sound engine when the
+  // key is turned. Timed to the recording: it cranks, then the engine
+  // "catches" ~0.8 s in — that's when the generated engine swells up under
+  // the sample's settling tail.
+  const STARTER_URL = 'sounds/start.ogg?v=23';
+  const STARTER_CATCH = 0.8;   // s: engine fires in the recording
+  const STARTER_FADE = 0.55;   // s: generated engine swell-in
+  const SHUTDOWN_TIME = 1.3;   // s: revs wind down to a halt on key-off
+  let starterBytes = null;     // cached raw file (fetched once)
+
+  async function playStarter(ctx, volume) {
+    try {
+      if (!starterBytes) {
+        starterBytes = await (await fetch(STARTER_URL)).arrayBuffer();
+      }
+      // decodeAudioData detaches its input, so decode a fresh copy each time.
+      const buf = await ctx.decodeAudioData(starterBytes.slice(0));
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = volume;
+      src.connect(g);
+      g.connect(ctx.destination);
+      src.start();
+    } catch (e) { /* starter is cosmetic — never block the engine on it */ }
+  }
+
+  async function startEngine(opts = {}) {
+    const withStarter = opts.withStarter !== false;
+    // Cancel any in-flight spin-down / crank so a quick re-start is clean.
+    if (shutdown) { shutdown.snd.stop(); shutdown = null; }
+    cranking = null;
+    // Set the level before start() (while stopped) so it only stages the
+    // value; the master itself is faded in below, not snapped up.
+    sound.setVolume(settings.volume / 100);
     try {
       await sound.start();
     } catch (err) {
@@ -539,14 +575,30 @@
         'Sound engine failed to start: ' + err.message;
       return;
     }
-    sound.setVolume(settings.volume / 100);
     engineOn = true;
     el.engineToggle.textContent = '■ STOP ENGINE';
+    if (withStarter && sound.ctx) {
+      playStarter(sound.ctx, settings.volume / 100);
+      sound.fadeIn(STARTER_CATCH, STARTER_FADE); // swell in as the engine catches
+      cranking = { elapsed: 0 };
+    } else {
+      sound.fadeIn(0, 0.15); // instant-ish (e.g. swapping sound engines)
+    }
   }
-  function stopEngine() {
-    sound.stop();
+
+  function stopEngine(opts = {}) {
+    if (!engineOn && !cranking) return;
     engineOn = false;
+    cranking = null;
     el.engineToggle.textContent = '▶ START ENGINE';
+    if (opts.spinDown === false) { sound.stop(); return; }
+    // Emulate the engine dying: the revs wind down to a stop, then silence.
+    shutdown = {
+      snd: sound,
+      elapsed: 0,
+      rpm0: Math.max(engine.rpm, settings.idleRpm),
+      faded: false,
+    };
   }
 
   $('btn-start').addEventListener('click', async () => {
@@ -575,24 +627,60 @@
     }
     engine.update(dt);
 
-    if (engineOn) {
+    // Displayed rpm/gear depend on run state (a fully-off engine reads 0,
+    // even though the model keeps idling internally).
+    let dispRpm = 0;
+    let dispGear = 'N';
+    let dispThrottle = 0;
+
+    if (shutdown) {
+      // Key-off: revs wind down to a halt, then the sound is torn down.
+      shutdown.elapsed += dt;
+      const p = Math.min(1, shutdown.elapsed / SHUTDOWN_TIME);
+      // Decel curve reaches 0 at p=1; a small shudder as it dies.
+      const shudder = 1 + 0.05 * Math.sin(shutdown.elapsed * 30) * (1 - p);
+      dispRpm = Math.max(0, shutdown.rpm0 * Math.pow(1 - p, 1.6) * shudder);
+      dispGear = 'N';
+      dispThrottle = 0;
+      shutdown.snd.update(dispRpm, 0, settings.maxRpm, settings.cylinders, false, 0);
+      // Fade the last of the sound out so the low-rpm tail doesn't drone.
+      if (!shutdown.faded && p > 0.55) {
+        shutdown.snd.fadeOut(SHUTDOWN_TIME * (1 - 0.55));
+        shutdown.faded = true;
+      }
+      if (p >= 1) { shutdown.snd.stop(); shutdown = null; }
+    } else if (engineOn) {
+      if (cranking) {
+        // Starter is cranking: hold the needle low and let it swing up to
+        // idle as the engine catches (the audio is the recorded clip; the
+        // generated engine is still silent until fadeIn opens the master).
+        cranking.elapsed += dt;
+        const p = Math.min(1, cranking.elapsed / STARTER_CATCH);
+        const ease = p * p * (3 - 2 * p); // smoothstep
+        dispRpm = settings.idleRpm * 0.9 * ease;
+        if (cranking.elapsed >= STARTER_CATCH) cranking = null;
+      } else {
+        dispRpm = engine.rpm;
+        dispGear = engine.displayGear;
+        dispThrottle = engine.throttle;
+      }
       sound.update(engine.rpm, engine.throttle, settings.maxRpm,
         settings.cylinders, engine.shifting, engine.shiftDir);
     }
 
     // Gauges
-    tacho.value = engine.rpm;
+    tacho.value = dispRpm;
     speedo.value = displaySpeed(engine.speed);
     tacho.draw();
     speedo.draw();
 
     // Readouts
-    el.gear.textContent = engine.displayGear;
-    el.roRpm.textContent = String(Math.round(engine.rpm / 10) * 10);
+    el.gear.textContent = dispGear;
+    el.roRpm.textContent = String(Math.round(dispRpm / 10) * 10);
     el.roSpeed.textContent = String(Math.round(displaySpeed(engine.speed)));
-    el.roThrottle.textContent = String(Math.round(engine.throttle * 100));
+    el.roThrottle.textContent = String(Math.round(dispThrottle * 100));
     el.shiftLight.classList.toggle('on',
-      engine.rpm >= redlineFor(settings) || engine.shifting);
+      engineOn && !cranking && (engine.rpm >= redlineFor(settings) || engine.shifting));
 
     requestAnimationFrame(loop);
   }

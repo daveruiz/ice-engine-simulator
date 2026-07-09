@@ -78,6 +78,12 @@ user gesture before audio can play).
   - **Braking**: under hard braking the gear is held (no shifting mid-stop);
     the gears drop through only as the car crawls to a halt. Downshifts get a
     rev-match throttle blip in the sound; upshifts get a torque cut.
+- **Ignition & shutdown**: turning the key plays a shared cranking clip
+  ([`sounds/start.ogg`](sounds/start.ogg)) and, as the engine catches
+  (~0.8 s in), swells the generated engine up under the sample's tail — for
+  whichever sound engine is active. Stopping winds the revs down to a halt
+  (the tacho falls with it) before the sound is cut, instead of an abrupt
+  fade.
 - **Sound** — three interchangeable engines (Settings → Sound):
   - **Synthesized** (`js/sound.js`, always available): firing frequency
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
