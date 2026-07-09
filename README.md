@@ -1,9 +1,10 @@
 # ICE Simulator
 
 A web app that simulates the **sound of a combustion (ICE) engine** for use in
-electric cars. Feed it a speed — from an on-screen slider or from the device's
-GPS — and it derives gear, RPM and engine load like an automatic gearbox would,
-then synthesizes the engine sound in real time with the Web Audio API.
+electric cars. Feed it a speed — from an on-screen slider, touch pedals, or the
+device's GPS — and it derives gear, RPM and engine load like an automatic
+gearbox would, then produces the engine sound in real time with the Web Audio
+API (a physical model, a lightweight synth, or crossfaded recorded samples).
 
 No build step, no dependencies: plain HTML/CSS/JS. Works on mobile browsers
 and in the Tesla in-car browser (any Chromium-based browser).
@@ -40,21 +41,27 @@ user gesture before audio can play).
 - **Input**: target speed, from the slider (manual mode), touch pedals
   (pedal mode), or `navigator.geolocation.watchPosition` (GPS mode — uses
   `coords.speed` when available, falls back to haversine distance between
-  fixes).
+  fixes). GPS mode also has a small **REV pedal** (a momentary clutch-in) to
+  blip the engine at a standstill or over the top of the moving speed.
 - **Pedal mode**: on-screen gas and brake pedals where the press amount
-  comes from *where* you touch — near the top is a light press, near the
-  bottom is flooring it — and sliding your finger modulates it live. Both
-  pedals track independent touches (left-foot braking works). A small
-  vehicle physics model integrates speed from the pedals: full gas
-  accelerates hard (fading near top speed), no pedals coasts down against
-  drag (so holding a speed needs a bit of throttle, like a real car), and
-  the brake decelerates strongly.
-- **Drivetrain model** (`js/engine.js`): geometric gear spacing computed from
-  *number of gears*, *max speed* and *max RPM*. An automatic shift logic with
-  shift-up/shift-down RPM thresholds, hysteresis, and a torque-cut shift time.
-  RPM follows speed through the current gear ratio, clamped at idle. Engine
-  load (throttle) is estimated from acceleration and drives the sound
-  character.
+  comes from *where* you touch — the position maps to 30–100% with dead
+  margins at the extremes (hard to hit accurately on touch), and sliding
+  your finger modulates it live. Both pedals track independent touches
+  (left-foot braking works). A small vehicle physics model integrates
+  speed from the pedals: full gas accelerates hard (fading near top speed),
+  no pedals coasts down against drag (so holding a speed needs a bit of
+  throttle, like a real car), and the brake decelerates strongly. An **N/D
+  handle** between the pedals switches to neutral, where the gas pedal
+  free-revs the engine without moving the car.
+- **Drivetrain model** (`js/engine.js`): near-linear per-gear ratios (like a
+  real gearbox — big RPM drops between the low gears, small ones up top),
+  computed from *number of gears*, *max speed* and *max RPM*. Automatic shift
+  logic with shift-up/shift-down RPM thresholds, hysteresis, and a torque-cut
+  shift time. RPM follows speed through the current gear ratio (clamped at
+  idle), with a rev limiter that cuts injection in bursts at redline — the
+  "bru-bru" bounce. In neutral the engine free-revs with configurable,
+  non-linear rev-up / rev-down response. Engine load (throttle) is estimated
+  from acceleration and drives the sound character.
 - **Driver behavior model**: shifting reacts to *how* you drive, not just
   speed:
   - A driving-style estimate (rises fast under hard acceleration, cools down
@@ -64,10 +71,13 @@ user gesture before audio can play).
   - **Kickdown**: strong acceleration demand below the power band drops one
     or more gears first (like flooring an automatic), with an inhibit window
     after upshifts so the box never hunts at full throttle.
+  - **1st gear is for launching**: coming down through 2nd, the box holds 2nd
+    while rolling and only drops to 1st near a stop or when lugging near idle
+    (kickdown excepted) — so relaxed slowing stays in 2nd and pulls away
+    again in 2nd.
   - **Braking**: under hard braking the gear is held (no shifting mid-stop);
-    only as the car comes down below ~10 km/h do the gears drop through
-    quickly so it's back in 1st when it halts. Downshifts get a rev-match
-    throttle blip in the sound; upshifts get a torque cut.
+    the gears drop through only as the car crawls to a halt. Downshifts get a
+    rev-match throttle blip in the sound; upshifts get a torque cut.
 - **Sound** — three interchangeable engines (Settings → Sound):
   - **Synthesized** (`js/sound.js`, always available): firing frequency
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
@@ -101,11 +111,13 @@ user gesture before audio can play).
     per engine, each configured by a commented
     [`pack.js`](sounds/v8/pack.js); see
     [sounds/README.md](sounds/README.md). Load-based slots (`start`,
-    `idle`, `gasFull`, `gasHalf`, `gasRelease`) are crossfaded by engine
-    load and pitch-shifted to the current RPM, racing-game style. A
-    *single* full-throttle loop is a complete pack; every optional slot
-    improves realism. Packs load lazily when selected in Settings, loops
-    are made seamless and volume-normalized at load time.
+    `idle`, `gasFull`, `gasHalf`, `gasRelease`, `pop`) are crossfaded by
+    engine load and pitch-shifted to the current RPM, racing-game style —
+    `gasRelease` can loop or fire as a one-shot lift-off burble, and
+    overrun/shift **exhaust pops** play (a recording, or a synthesized pop
+    if none is supplied). A *single* full-throttle loop is a complete pack;
+    every optional slot improves realism. Packs load lazily when selected in
+    Settings, loops are made seamless and volume-normalized at load time.
 - **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
   gear indicator and shift light, styled like an instrument cluster.
 
@@ -115,18 +127,36 @@ user gesture before audio can play).
 | --- | --- |
 | Speed source | Manual slider / Pedals / GPS |
 | Units | km/h / mph |
+| Engine sound | Physical model / Synthesized / sample packs |
 | Max RPM | 4,000 – 12,000 |
 | Idle RPM | 500 – 1,500 |
 | Cylinders | 2 – 12 |
+| Neutral rev-up / rev-down time | 0.1 – 2.5 s |
 | Gears | 3 – 10 |
 | Shift-up / shift-down RPM | configurable with hysteresis guard |
 | Max speed | 120 – 400 km/h |
 | Volume | 0 – 100% |
 
-Settings persist in `localStorage`.
+New installs default to **GPS** input and the **physical** engine sound.
+Settings persist in `localStorage`. The physical model has its own deep
+tuning in [`tuner.html`](tuner.html) (linked from Settings).
 
 ## Roadmap
 
 - More physical-model presets (inline-4 turbo, flat-plane V8, diesel…)
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available
+
+## License
+
+Copyright (C) 2026 David Ruiz.
+
+Free to use, share and modify under the **GNU General Public License v3.0**
+(or later) — see [LICENSE](LICENSE). GPL is copyleft: you may redistribute and
+adapt it freely, but derived works must keep this license and its copyright
+attribution, and share their source under the same terms.
+
+The physical-model synthesis is informed by Baldan, Lachambre, Delle Monache
+& Boussard, *"Physically informed car engine sound synthesis for virtual and
+augmented environments"* (IEEE VR Workshop on Sonic Interactions for Virtual
+Environments, 2015).
