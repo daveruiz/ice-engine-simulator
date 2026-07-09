@@ -309,22 +309,28 @@
   // GPS-mode rev pedal: momentary clutch-in blip. While held it puts the
   // engine in neutral and revs it from the touch position (top = light,
   // bottom = full), so you can make noise at a stop — or over the top of
-  // moving GPS speed — without leaving GPS mode. Releasing re-engages the
-  // gear that matches the current speed.
+  // moving GPS speed — without leaving GPS mode. On release the revs spin
+  // down: if the car is stopped we stay in neutral so the decay is audible;
+  // once GPS shows movement the render loop re-engages a gear.
+  let revHeld = false;
   function setupRevPedal(elPedal) {
     const apply = (e) => {
       const rect = elPedal.getBoundingClientRect();
       const press = pedalPress((e.clientY - rect.top) / rect.height);
       elPedal.style.setProperty('--press', press.toFixed(2));
       elPedal.classList.add('pressed');
+      revHeld = true;
       engine.setNeutral(true);
       engine.setRevDemand(press);
     };
     const release = () => {
       elPedal.style.setProperty('--press', '0');
       elPedal.classList.remove('pressed');
+      revHeld = false;
       engine.setRevDemand(0);
-      engine.setNeutral(false);
+      // Stay in neutral while stopped so the free-rev spins down; the loop
+      // re-engages a gear as soon as the car is moving.
+      if (engine.speed > 1) engine.setNeutral(false);
     };
     elPedal.addEventListener('pointerdown', (e) => {
       elPedal.setPointerCapture(e.pointerId);
@@ -539,6 +545,12 @@
     lastTime = now;
 
     if (settings.source === 'pedals') updatePedalPhysics(dt);
+    // GPS rev pedal: once the car is moving again, drop out of the
+    // held-at-standstill neutral and re-engage a gear.
+    if (settings.source === 'gps' && engine.neutral && !revHeld &&
+        engine.speed > 1) {
+      engine.setNeutral(false);
+    }
     engine.update(dt);
 
     if (engineOn) {
