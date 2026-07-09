@@ -9,6 +9,14 @@ API (a physical model, a lightweight synth, or crossfaded recorded samples).
 No build step, no dependencies: plain HTML/CSS/JS. Works on mobile browsers
 and in the Tesla in-car browser (any Chromium-based browser).
 
+## Motivation
+
+I have an electric car and it's a lot of fun — this just makes it even more
+fun. **Teslas** work especially nicely with it: the built-in browser has GPS
+access, so you can open the app in the car, switch the speed source to GPS,
+and let the (silent) EV borrow a combustion soundtrack that follows how you
+actually drive.
+
 ## Live app
 
 **https://daveruiz.github.io/ice-engine-simulator/**
@@ -148,13 +156,32 @@ New installs default to **GPS** input and the **physical** engine sound.
 Settings persist in `localStorage`. The physical model has its own deep
 tuning in [`tuner.html`](tuner.html) (linked from Settings).
 
-## Roadmap
+## Known limitations
+
+- **GPS latency.** GPS needs time to work out your speed, so in GPS mode the
+  sound reacts a little *late* to changes — it lags behind sharp
+  acceleration and braking. This is unavoidable for now: the speed simply
+  isn't known any sooner. (The real fix would be an API that reads the
+  accelerator pedal directly — if anyone builds that, get in touch. :P)
+  For a tighter, latency-free feel, use the on-screen **pedals** mode
+  instead.
+
+## Project status
+
+Not actively maintained anymore — it does what I wanted it to do. I'll still
+add the occasional feature if a cool idea crosses my mind, and PRs are
+welcome. Older asset versions are left in place on purpose, so you can see how
+it evolved.
+
+If you enjoy it, **give the repo a ⭐ — it's the best kind of thank-you.**
+
+Possible future ideas:
 
 - More physical-model presets (inline-4 turbo, flat-plane V8, diesel…)
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available
 
-## License
+## License & thanks
 
 Copyright (C) 2026 David Ruiz.
 
@@ -163,7 +190,8 @@ Free to use, share and modify under the **GNU General Public License v3.0**
 adapt it freely, but derived works must keep this license and its copyright
 attribution, and share their source under the same terms.
 
-The physical-model synthesis is informed by Baldan, Lachambre, Delle Monache
-& Boussard, *"Physically informed car engine sound synthesis for virtual and
-augmented environments"* (IEEE VR Workshop on Sonic Interactions for Virtual
-Environments, 2015).
+Special thanks to Baldan, Lachambre, Delle Monache & Boussard, whose paper
+*"Physically informed car engine sound synthesis for virtual and augmented
+environments"* (IEEE VR Workshop on Sonic Interactions for Virtual
+Environments, 2015) informs the physical-model synthesis and makes such a
+convincing real engine sound possible.
