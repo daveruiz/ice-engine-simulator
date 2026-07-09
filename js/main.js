@@ -292,6 +292,40 @@
   setupPedal($('pedal-gas'), 'gas');
   setupPedal($('pedal-brake'), 'brake');
 
+  // GPS-mode rev pedal: momentary clutch-in blip. While held it puts the
+  // engine in neutral and revs it from the touch position (top = light,
+  // bottom = full), so you can make noise at a stop — or over the top of
+  // moving GPS speed — without leaving GPS mode. Releasing re-engages the
+  // gear that matches the current speed.
+  function setupRevPedal(elPedal) {
+    const apply = (e) => {
+      const rect = elPedal.getBoundingClientRect();
+      const frac = (e.clientY - rect.top) / rect.height;
+      const press = Math.max(0.1, Math.min(1, frac));
+      elPedal.style.setProperty('--press', press.toFixed(2));
+      elPedal.classList.add('pressed');
+      engine.setNeutral(true);
+      engine.setRevDemand(press);
+    };
+    const release = () => {
+      elPedal.style.setProperty('--press', '0');
+      elPedal.classList.remove('pressed');
+      engine.setRevDemand(0);
+      engine.setNeutral(false);
+    };
+    elPedal.addEventListener('pointerdown', (e) => {
+      elPedal.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      apply(e);
+    });
+    elPedal.addEventListener('pointermove', (e) => {
+      if (elPedal.hasPointerCapture(e.pointerId)) apply(e);
+    });
+    elPedal.addEventListener('pointerup', release);
+    elPedal.addEventListener('pointercancel', release);
+  }
+  setupRevPedal($('rev-pedal'));
+
   /**
    * Pedal-mode vehicle physics (km/h per second): full gas accelerates
    * hard (fading near top speed), brake decelerates strongly, and with

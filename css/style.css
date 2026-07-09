@@ -299,11 +299,19 @@ html, body {
 
 #gps-status {
   display: flex;
+  align-items: stretch;
+  gap: 16px;
+  height: clamp(120px, 20vh, 180px);
+  padding: 4px 2vw;
+  color: var(--dim);
+}
+#rev-pedal { flex: 0 0 clamp(72px, 16vw, 120px); }
+.gps-info {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 18px 0;
-  color: var(--dim);
 }
 .gps-dot {
   width: 12px;
@@ -531,4 +539,5 @@ body.tuner-page {
   .gauge-wrap { flex: 1 1 45%; max-width: min(48vw, 30vh); }
   #center-stack { order: 3; flex: 1 1 100%; flex-direction: row; justify-content: center; }
   #pedal-controls { height: clamp(120px, 22vh, 200px); }
+  #gps-status { height: clamp(110px, 20vh, 180px); }
 }
