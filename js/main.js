@@ -312,6 +312,12 @@
   // moving GPS speed — without leaving GPS mode. On release the revs spin
   // down: if the car is stopped we stay in neutral so the decay is audible;
   // once GPS shows movement the render loop re-engages a gear.
+  //
+  // The "moving" threshold sits above typical standstill GPS noise: a phone
+  // sitting still still reports a few km/h of jitter, and at 1 km/h a single
+  // noisy fix would re-engage a gear and snap the revs to idle (killing the
+  // spin-down). ~6 km/h is safely past that but still a walking pace.
+  const MOVING_KMH = 6;
   let revHeld = false;
   function setupRevPedal(elPedal) {
     const apply = (e) => {
@@ -330,7 +336,7 @@
       engine.setRevDemand(0);
       // Stay in neutral while stopped so the free-rev spins down; the loop
       // re-engages a gear as soon as the car is moving.
-      if (engine.speed > 1) engine.setNeutral(false);
+      if (engine.speed > MOVING_KMH) engine.setNeutral(false);
     };
     elPedal.addEventListener('pointerdown', (e) => {
       elPedal.setPointerCapture(e.pointerId);
@@ -548,7 +554,7 @@
     // GPS rev pedal: once the car is moving again, drop out of the
     // held-at-standstill neutral and re-engage a gear.
     if (settings.source === 'gps' && engine.neutral && !revHeld &&
-        engine.speed > 1) {
+        engine.speed > MOVING_KMH) {
       engine.setNeutral(false);
     }
     engine.update(dt);
