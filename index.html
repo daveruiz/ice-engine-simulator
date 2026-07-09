@@ -10,217 +10,215 @@
   the GNU General Public License (LICENSE file) for details.
 -->
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0b0e13">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>ICE Simulator — Engine Sound for EVs</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
-<!-- Bump ?v= on every release: defeats stale-cache mismatches between
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e13">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ICE Simulator — Engine Sound for EVs</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
+  <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-<link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="stylesheet" href="css/style.css?v=26">
 </head>
+
 <body>
 
-<!-- Start overlay: browsers require a user gesture to start audio -->
-<div id="start-overlay">
-  <div class="start-card">
-    <h1>ICE&nbsp;SIMULATOR</h1>
-    <p>Combustion engine sound for your electric car</p>
-    <button id="btn-start">START ENGINE</button>
-    <p class="hint">Sound requires a tap to start (browser policy)</p>
+  <!-- Start overlay: browsers require a user gesture to start audio -->
+  <div id="start-overlay">
+    <div class="start-card">
+      <h1>ICE&nbsp;SIMULATOR</h1>
+      <p>Combustion engine sound for your electric car</p>
+      <button id="btn-start">START ENGINE</button>
+      <p class="hint">Sound requires a tap to start (browser policy)</p>
+    </div>
   </div>
-</div>
 
-<main id="app" class="hidden">
+  <main id="app" class="hidden">
 
-  <!-- Dashboard -->
-  <section id="dashboard">
-    <div class="gauge-wrap">
-      <canvas id="tacho"></canvas>
-      <div class="gauge-label">RPM ×1000</div>
-    </div>
-
-    <div id="center-stack">
-      <div id="gear-display">
-        <span id="gear-value">N</span>
-        <span class="gear-caption">GEAR</span>
+    <!-- Dashboard -->
+    <section id="dashboard">
+      <div class="gauge-wrap">
+        <canvas id="tacho"></canvas>
+        <div class="gauge-label">RPM ×1000</div>
       </div>
-      <div id="shift-light" title="Shift indicator"></div>
-    </div>
 
-    <div class="gauge-wrap">
-      <canvas id="speedo"></canvas>
-      <div class="gauge-label" id="speed-unit-label">km/h</div>
-    </div>
-  </section>
-
-  <!-- Digital readouts -->
-  <section id="readouts">
-    <div class="readout"><span id="ro-rpm">0</span><label>RPM</label></div>
-    <div class="readout big"><span id="ro-speed">0</span><label id="ro-speed-unit">km/h</label></div>
-    <div class="readout"><span id="ro-throttle">0</span><label>LOAD %</label></div>
-  </section>
-
-  <!-- Speed input -->
-  <section id="controls">
-    <div id="manual-controls">
-      <input type="range" id="speed-slider" min="0" max="250" value="0" step="1" aria-label="Speed">
-      <div class="quick-buttons">
-        <button class="quick" data-speed="0">STOP</button>
-        <button class="quick" data-speed="50">CITY</button>
-        <button class="quick" data-speed="90">ROAD</button>
-        <button class="quick" data-speed="120">HWY</button>
-        <button class="quick" data-speed="-1">MAX</button>
+      <div id="center-stack">
+        <div id="gear-display">
+          <span id="gear-value">N</span>
+          <span class="gear-caption">GEAR</span>
+        </div>
+        <div id="shift-light" title="Shift indicator"></div>
       </div>
-    </div>
-    <div id="pedal-controls" class="hidden">
-      <div class="pedal brake" id="pedal-brake" aria-label="Brake pedal">
-        <div class="pedal-fill"></div>
-        <span class="pedal-label">BRAKE</span>
+
+      <div class="gauge-wrap">
+        <canvas id="speedo"></canvas>
+        <div class="gauge-label" id="speed-unit-label">km/h</div>
       </div>
-      <div id="gear-selector" aria-label="Gear selector">
-        <button id="mode-n" class="mode-btn">N</button>
-        <button id="mode-d" class="mode-btn active">D</button>
+    </section>
+
+    <!-- Digital readouts -->
+    <section id="readouts">
+      <div class="readout"><span id="ro-rpm">0</span><label>RPM</label></div>
+      <div class="readout big"><span id="ro-speed">0</span><label id="ro-speed-unit">km/h</label></div>
+      <div class="readout"><span id="ro-throttle">0</span><label>LOAD %</label></div>
+    </section>
+
+    <!-- Speed input -->
+    <section id="controls">
+      <div id="manual-controls">
+        <input type="range" id="speed-slider" min="0" max="250" value="0" step="1" aria-label="Speed">
+        <div class="quick-buttons">
+          <button class="quick" data-speed="0">STOP</button>
+          <button class="quick" data-speed="50">CITY</button>
+          <button class="quick" data-speed="90">ROAD</button>
+          <button class="quick" data-speed="120">HWY</button>
+          <button class="quick" data-speed="-1">MAX</button>
+        </div>
       </div>
-      <div class="pedal gas" id="pedal-gas" aria-label="Gas pedal">
-        <div class="pedal-fill"></div>
-        <span class="pedal-label">GAS</span>
+      <div id="pedal-controls" class="hidden">
+        <div class="pedal brake" id="pedal-brake" aria-label="Brake pedal">
+          <div class="pedal-fill"></div>
+          <span class="pedal-label">BRAKE</span>
+        </div>
+        <div id="gear-selector" aria-label="Gear selector">
+          <button id="mode-n" class="mode-btn">N</button>
+          <button id="mode-d" class="mode-btn active">D</button>
+        </div>
+        <div class="pedal gas" id="pedal-gas" aria-label="Gas pedal">
+          <div class="pedal-fill"></div>
+          <span class="pedal-label">GAS</span>
+        </div>
       </div>
-    </div>
-    <div id="gps-status" class="hidden">
-      <div id="rev-pedal" class="pedal gas" aria-label="Rev pedal (blip throttle in neutral)">
-        <div class="pedal-fill"></div>
-        <span class="pedal-label">REV</span>
+      <div id="gps-status" class="hidden">
+        <div id="rev-pedal" class="pedal gas" aria-label="Rev pedal (blip throttle in neutral)">
+          <div class="pedal-fill"></div>
+          <span class="pedal-label">REV</span>
+        </div>
+        <div class="gps-info">
+          <span class="gps-dot"></span>
+          <span id="gps-message">Waiting for GPS fix…</span>
+        </div>
       </div>
-      <div class="gps-info">
-        <span class="gps-dot"></span>
-        <span id="gps-message">Waiting for GPS fix…</span>
+    </section>
+
+    <!-- Bottom bar -->
+    <nav id="bottom-bar">
+      <button id="btn-engine-toggle" class="bar-btn">■ STOP ENGINE</button>
+      <button id="btn-settings" class="bar-btn">⚙ SETTINGS</button>
+    </nav>
+  </main>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" class="hidden">
+    <div class="settings-inner">
+      <header>
+        <h2>Settings</h2>
+        <button id="btn-settings-close" class="bar-btn">✕ CLOSE</button>
+      </header>
+
+      <h3>Speed source</h3>
+      <div class="setting-row">
+        <label for="set-source">Input</label>
+        <select id="set-source">
+          <option value="manual">Manual (slider)</option>
+          <option value="pedals">Pedals (gas / brake)</option>
+          <option value="gps">GPS / device sensors</option>
+        </select>
       </div>
-    </div>
-  </section>
+      <div class="setting-row">
+        <label for="set-units">Units</label>
+        <select id="set-units">
+          <option value="kmh">km/h</option>
+          <option value="mph">mph</option>
+        </select>
+      </div>
 
-  <!-- Bottom bar -->
-  <nav id="bottom-bar">
-    <button id="btn-engine-toggle" class="bar-btn">■ STOP ENGINE</button>
-    <button id="btn-settings" class="bar-btn">⚙ SETTINGS</button>
-  </nav>
-</main>
+      <h3>Engine</h3>
+      <div class="setting-row">
+        <label for="set-maxrpm">Max RPM <output id="out-maxrpm"></output></label>
+        <input type="range" id="set-maxrpm" min="4000" max="12000" step="500">
+      </div>
+      <div class="setting-row">
+        <label for="set-idlerpm">Idle RPM <output id="out-idlerpm"></output></label>
+        <input type="range" id="set-idlerpm" min="500" max="1500" step="50">
+      </div>
+      <div class="setting-row">
+        <label for="set-revup">Neutral rev-up time <output id="out-revup"></output></label>
+        <input type="range" id="set-revup" min="0.1" max="2" step="0.05">
+      </div>
+      <div class="setting-row">
+        <label for="set-revdown">Neutral rev-down time <output id="out-revdown"></output></label>
+        <input type="range" id="set-revdown" min="0.1" max="2.5" step="0.05">
+      </div>
 
-<!-- Settings panel -->
-<div id="settings-panel" class="hidden">
-  <div class="settings-inner">
-    <header>
-      <h2>Settings</h2>
-      <button id="btn-settings-close" class="bar-btn">✕ CLOSE</button>
-    </header>
+      <h3>Transmission</h3>
+      <div class="setting-row">
+        <label for="set-gears">Gears <output id="out-gears"></output></label>
+        <input type="range" id="set-gears" min="3" max="10" step="1">
+      </div>
+      <div class="setting-row">
+        <label for="set-shiftup">Shift up at RPM <output id="out-shiftup"></output></label>
+        <input type="range" id="set-shiftup" min="2000" max="11000" step="100">
+      </div>
+      <div class="setting-row">
+        <label for="set-shiftdown">Shift down at RPM <output id="out-shiftdown"></output></label>
+        <input type="range" id="set-shiftdown" min="800" max="5000" step="100">
+      </div>
 
-    <h3>Speed source</h3>
-    <div class="setting-row">
-      <label for="set-source">Input</label>
-      <select id="set-source">
-        <option value="manual">Manual (slider)</option>
-        <option value="pedals">Pedals (gas / brake)</option>
-        <option value="gps">GPS / device sensors</option>
-      </select>
-    </div>
-    <div class="setting-row">
-      <label for="set-units">Units</label>
-      <select id="set-units">
-        <option value="kmh">km/h</option>
-        <option value="mph">mph</option>
-      </select>
-    </div>
+      <h3>Vehicle</h3>
+      <div class="setting-row">
+        <label for="set-maxspeed">Max speed (km/h) <output id="out-maxspeed"></output></label>
+        <input type="range" id="set-maxspeed" min="120" max="400" step="10">
+      </div>
 
-    <h3>Engine</h3>
-    <div class="setting-row">
-      <label for="set-maxrpm">Max RPM <output id="out-maxrpm"></output></label>
-      <input type="range" id="set-maxrpm" min="4000" max="12000" step="500">
-    </div>
-    <div class="setting-row">
-      <label for="set-idlerpm">Idle RPM <output id="out-idlerpm"></output></label>
-      <input type="range" id="set-idlerpm" min="500" max="1500" step="50">
-    </div>
-    <div class="setting-row">
-      <label for="set-revup">Neutral rev-up time <output id="out-revup"></output></label>
-      <input type="range" id="set-revup" min="0.1" max="2" step="0.05">
-    </div>
-    <div class="setting-row">
-      <label for="set-revdown">Neutral rev-down time <output id="out-revdown"></output></label>
-      <input type="range" id="set-revdown" min="0.1" max="2.5" step="0.05">
-    </div>
+      <h3>Sound</h3>
+      <div class="setting-row">
+        <label for="set-soundset">Engine</label>
+        <select id="set-soundset">
+          <option value="synth">Synthesized (built-in)</option>
+        </select>
+        <p class="hint" id="soundset-hint">Loading engine library…</p>
+      </div>
+      <div class="setting-row" id="row-cylinders">
+        <label for="set-cylinders">Cylinders <output id="out-cylinders"></output></label>
+        <input type="range" id="set-cylinders" min="2" max="12" step="1">
+      </div>
+      <div class="setting-row" id="row-tuner">
+        <a class="bar-btn link-btn" href="tuner.html">⚙ PHYSICAL ENGINE TUNER</a>
+      </div>
+      <div class="setting-row">
+        <label for="set-volume">Volume <output id="out-volume"></output></label>
+        <input type="range" id="set-volume" min="0" max="100" step="1">
+      </div>
+      <div class="setting-row">
+        <label for="set-startvol">Start sound volume <output id="out-startvol"></output></label>
+        <input type="range" id="set-startvol" min="0" max="200" step="5">
+      </div>
 
-    <h3>Transmission</h3>
-    <div class="setting-row">
-      <label for="set-gears">Gears <output id="out-gears"></output></label>
-      <input type="range" id="set-gears" min="3" max="10" step="1">
-    </div>
-    <div class="setting-row">
-      <label for="set-shiftup">Shift up at RPM <output id="out-shiftup"></output></label>
-      <input type="range" id="set-shiftup" min="2000" max="11000" step="100">
-    </div>
-    <div class="setting-row">
-      <label for="set-shiftdown">Shift down at RPM <output id="out-shiftdown"></output></label>
-      <input type="range" id="set-shiftdown" min="800" max="5000" step="100">
-    </div>
+      <div class="setting-row">
+        <button id="btn-reset-defaults" class="bar-btn danger">RESET TO DEFAULTS</button>
+      </div>
 
-    <h3>Vehicle</h3>
-    <div class="setting-row">
-      <label for="set-maxspeed">Max speed (km/h) <output id="out-maxspeed"></output></label>
-      <input type="range" id="set-maxspeed" min="120" max="400" step="10">
+      <footer id="settings-footer">
+        <a href="https://github.com/daveruiz/ice-engine-simulator" target="_blank" rel="noopener">
+          github.com/daveruiz/ice-engine-simulator
+        </a>
+      </footer>
     </div>
-
-    <h3>Sound</h3>
-    <div class="setting-row">
-      <label for="set-soundset">Engine</label>
-      <select id="set-soundset">
-        <option value="synth">Synthesized (built-in)</option>
-      </select>
-      <p class="hint" id="soundset-hint">Loading engine library…</p>
-    </div>
-    <div class="setting-row" id="row-cylinders">
-      <label for="set-cylinders">Cylinders <output id="out-cylinders"></output></label>
-      <input type="range" id="set-cylinders" min="2" max="12" step="1">
-    </div>
-    <div class="setting-row" id="row-tuner">
-      <a class="bar-btn link-btn" href="tuner.html">⚙ PHYSICAL ENGINE TUNER</a>
-    </div>
-    <div class="setting-row">
-      <label for="set-volume">Volume <output id="out-volume"></output></label>
-      <input type="range" id="set-volume" min="0" max="100" step="1">
-    </div>
-    <div class="setting-row">
-      <label for="set-startvol">Start sound volume <output id="out-startvol"></output></label>
-      <input type="range" id="set-startvol" min="0" max="200" step="5">
-    </div>
-
-    <div class="setting-row">
-      <button id="btn-reset-defaults" class="bar-btn danger">RESET TO DEFAULTS</button>
-    </div>
-
-    <p class="hint">Engines are registered in <code>sounds/engines.js</code>; each one
-    is a folder with a commented <code>pack.js</code> mapping clips to start /
-    idle / gas-full / gas-half / gas-release slots (see the repo's
-    sounds/README.md). A single full-throttle loop is enough per engine.
-    GPS requires HTTPS and location permission.</p>
-
-    <footer id="settings-footer">
-      <a href="https://github.com/daveruiz/ice-engine-simulator" target="_blank" rel="noopener">
-        github.com/daveruiz/ice-engine-simulator
-      </a>
-      <span>Vibe coded by David Ruiz</span>
-    </footer>
   </div>
-</div>
 
-<script src="js/engine.js?v=26"></script>
-<script src="js/sound.js?v=26"></script>
-<script src="js/samples.js?v=26"></script>
-<script src="js/physical-params.js?v=26"></script>
-<script src="js/physical.js?v=26"></script>
-<script src="js/dashboard.js?v=26"></script>
-<script src="js/main.js?v=26"></script>
+  <script src="js/engine.js?v=26"></script>
+  <script src="js/sound.js?v=26"></script>
+  <script src="js/samples.js?v=26"></script>
+  <script src="js/physical-params.js?v=26"></script>
+  <script src="js/physical.js?v=26"></script>
+  <script src="js/dashboard.js?v=26"></script>
+  <script src="js/main.js?v=26"></script>
 </body>
+
 </html>

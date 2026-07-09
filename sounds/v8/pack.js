@@ -37,9 +37,12 @@
  * seams and level differences are cleaned up automatically at load.
  */
 window.ENGINE_SOUND_PACK = {
-
   // Shown in Settings so you know which pack loaded.
-  name: 'V8 (recorded)',
+  name: "V8 (recorded)",
+
+  // Clips extracted from a YouTube V8 recording, origin/rights unclear —
+  // not confirmed as the original source. Included for personal/demo use;
+  // swap in your own recordings if you need clean provenance.
 
   // --- One-shot on engine start (set to null to disable) ------------
   // start: { file: 'start.mp3', volume: 1.0 },
@@ -56,16 +59,16 @@ window.ENGINE_SOUND_PACK = {
   // --- Idle loop (standstill) ---------------------------------------
   // rpm doubled vs the measured ~69 Hz: the analyzer locked onto the
   // 2nd harmonic, and the clip sounds right one octave lower.
-  idle: { file: 'idle.wav', rpm: 2060, volume: 0.75 },
+  idle: { file: "idle.ogg", rpm: 850, volume: 0.75 },
 
   // --- Gas: full throttle (REQUIRED) --------------------------------
   // Measured firing frequency ~180 Hz => ~2700 RPM.
-  gasFull: { file: 'gas_full.ogg', rpm: 2700, volume: 1.0 },
+  gasFull: { file: "gas_full.ogg", rpm: 2700, volume: 1.0 },
 
   // --- Gas: half throttle / cruise (set to null if you have no clip) -
   // Intentionally shares the same recording as gasRelease (one file on
   // disk, two slots pointing at it), a bit louder here.
-  gasHalf: { file: 'gas_release.wav', rpm: 2200, volume: 0.95 },
+  gasHalf: { file: "gas_release.ogg", rpm: 2200, volume: 0.95 },
 
   // --- Gas: released / overrun -------------------------------------
   // oneShot: true => fired ONCE when you lift off the gas (a decel
@@ -74,8 +77,7 @@ window.ENGINE_SOUND_PACK = {
   // own. Omit oneShot (or set false) to loop it as a steady overrun bed.
   //   duration: seconds to play of the clip as the one-shot (a long
   //             loop file still works as a short lift burble).
-  gasRelease: { file: 'gas_release.wav', rpm: 2200, volume: 0.9,
-    oneShot: true, duration: 0.9 },
+  gasRelease: null,
 
   // --- Tuning knobs (all optional; delete a line to use the default) -
   params: {
@@ -92,9 +94,9 @@ window.ENGINE_SOUND_PACK = {
     revBoost: 1.4,
 
     // Load thresholds (0..1) for the gas crossfade:
-    releaseMaxLoad: 0.2,  // below this load only gasRelease is heard
-    halfLoad: 0.5,        // load where gasHalf is at its strongest
-    fullMinLoad: 0.85,    // above this load only gasFull is heard
+    releaseMaxLoad: 0.2, // below this load only gasRelease is heard
+    halfLoad: 0.5, // load where gasHalf is at its strongest
+    fullMinLoad: 0.85, // above this load only gasFull is heard
 
     // Idle crossover (RPM): full idle sound below Start, none above End.
     idleFadeStartRpm: 900,
@@ -112,9 +114,9 @@ window.ENGINE_SOUND_PACK = {
     filterRpmHz: 2200,
 
     // Exhaust pops:
-    pops: true,      // false = no pops at all
-    popVolume: 0.6,  // loudness of each pop
-    popChance: 0.7,  // 0..1 how likely/dense the overrun crackle is
-    popWindow: 1.8,  // seconds of crackle after lifting off the gas
+    pops: true, // false = no pops at all
+    popVolume: 0.6, // loudness of each pop
+    popChance: 0.7, // 0..1 how likely/dense the overrun crackle is
+    popWindow: 1.8, // seconds of crackle after lifting off the gas
   },
 };

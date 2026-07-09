@@ -1,13 +1,17 @@
-# ICE Simulator
+# ICE Engine Simulator
 
-A web app that simulates the **sound of a combustion (ICE) engine** for use in
-electric cars. Feed it a speed — from an on-screen slider, touch pedals, or the
-device's GPS — and it derives gear, RPM and engine load like an automatic
-gearbox would, then produces the engine sound in real time with the Web Audio
-API (a physical model, a lightweight synth, or crossfaded recorded samples).
+A web app that simulates the **sound of am internal combustion engine (ICE)**
+for use in electric cars. Feed it a speed — from an on-screen slider, touch
+pedals, or the device's GPS — and it derives gear, RPM and engine load like
+an automatic gearbox would, then produces the engine sound in real time with
+the Web Audio API (a physical model, a lightweight synth, or crossfaded
+recorded samples).
 
 No build step, no dependencies: plain HTML/CSS/JS. Works on mobile browsers
 and in the Tesla in-car browser (any Chromium-based browser).
+
+This has been vibe-coded — no build tooling or framework needed, since Claude
+keeps it consistent instead.
 
 ## Motivation
 
@@ -15,7 +19,8 @@ I have an electric car and it's a lot of fun — this just makes it even more
 fun. **Teslas** work especially nicely with it: the built-in browser has GPS
 access, so you can open the app in the car, switch the speed source to GPS,
 and let the (silent) EV borrow a combustion soundtrack that follows how you
-actually drive.
+actually drive. I don't know about other EVs, but if your car has a browser
+and GPS, it should work there too.
 
 ## Live app
 
@@ -52,7 +57,7 @@ user gesture before audio can play).
   fixes). GPS mode also has a small **REV pedal** (a momentary clutch-in) to
   blip the engine at a standstill or over the top of the moving speed.
 - **Pedal mode**: on-screen gas and brake pedals where the press amount
-  comes from *where* you touch — the position maps to 30–100% with dead
+  comes from _where_ you touch — the position maps to 30–100% with dead
   margins at the extremes (hard to hit accurately on touch), and sliding
   your finger modulates it live. Both pedals track independent touches
   (left-foot braking works). A small vehicle physics model integrates
@@ -63,14 +68,14 @@ user gesture before audio can play).
   free-revs the engine without moving the car.
 - **Drivetrain model** (`js/engine.js`): near-linear per-gear ratios (like a
   real gearbox — big RPM drops between the low gears, small ones up top),
-  computed from *number of gears*, *max speed* and *max RPM*. Automatic shift
+  computed from _number of gears_, _max speed_ and _max RPM_. Automatic shift
   logic with shift-up/shift-down RPM thresholds, hysteresis, and a torque-cut
   shift time. RPM follows speed through the current gear ratio (clamped at
   idle), with a rev limiter that cuts injection in bursts at redline — the
   "bru-bru" bounce. In neutral the engine free-revs with configurable,
   non-linear rev-up / rev-down response. Engine load (throttle) is estimated
   from acceleration and drives the sound character.
-- **Driver behavior model**: shifting reacts to *how* you drive, not just
+- **Driver behavior model**: shifting reacts to _how_ you drive, not just
   speed:
   - A driving-style estimate (rises fast under hard acceleration, cools down
     slowly) slides the shift-up point between an early "economy" RPM for
@@ -98,9 +103,9 @@ user gesture before audio can play).
     oscillators through waveshaper distortion and a throttle-tracking
     lowpass, plus band-passed noise for intake/exhaust breath.
   - **Physical model** (`js/physical.js` + `js/physical-worklet.js`):
-    physically informed synthesis after Baldan et al., *"Physically
+    physically informed synthesis after Baldan et al., _"Physically
     informed car engine sound synthesis for virtual and augmented
-    environments"* (IEEE SIVE 2015). An AudioWorklet simulates the
+    environments"_ (IEEE SIVE 2015). An AudioWorklet simulates the
     actual sound-producing parts of the engine, sample by sample: each
     cylinder fires a combustion pressure pulse at its crank angle into
     per-bank exhaust header **waveguides** (a cross-plane V8 sends an
@@ -129,28 +134,30 @@ user gesture before audio can play).
     engine load and pitch-shifted to the current RPM, racing-game style —
     `gasRelease` can loop or fire as a one-shot lift-off burble, and
     overrun/shift **exhaust pops** play (a recording, or a synthesized pop
-    if none is supplied). A *single* full-throttle loop is a complete pack;
+    if none is supplied). A _single_ full-throttle loop is a complete pack;
     every optional slot improves realism. Packs load lazily when selected in
     Settings, loops are made seamless and volume-normalized at load time.
+    [`dev/`](dev/README.md) has headless-browser scripts for measuring a
+    recording's RPM and cutting clean loop points when preparing a pack.
 - **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
   gear indicator and shift light, styled like an instrument cluster.
 
 ## Configurable (⚙ Settings)
 
-| Setting | Range |
-| --- | --- |
-| Speed source | Manual slider / Pedals / GPS |
-| Units | km/h / mph |
-| Engine sound | Physical model / Synthesized / sample packs |
-| Max RPM | 4,000 – 12,000 |
-| Idle RPM | 500 – 1,500 |
-| Cylinders | 2 – 12 |
-| Neutral rev-up / rev-down time | 0.1 – 2.5 s |
-| Gears | 3 – 10 |
-| Shift-up / shift-down RPM | configurable with hysteresis guard |
-| Max speed | 120 – 400 km/h |
-| Volume | 0 – 100% |
-| Start sound volume | 0 – 200% (relative to volume) |
+| Setting                        | Range                                       |
+| ------------------------------ | ------------------------------------------- |
+| Speed source                   | Manual slider / Pedals / GPS                |
+| Units                          | km/h / mph                                  |
+| Engine sound                   | Physical model / Synthesized / sample packs |
+| Max RPM                        | 4,000 – 12,000                              |
+| Idle RPM                       | 500 – 1,500                                 |
+| Cylinders                      | 2 – 12                                      |
+| Neutral rev-up / rev-down time | 0.1 – 2.5 s                                 |
+| Gears                          | 3 – 10                                      |
+| Shift-up / shift-down RPM      | configurable with hysteresis guard          |
+| Max speed                      | 120 – 400 km/h                              |
+| Volume                         | 0 – 100%                                    |
+| Start sound volume             | 0 – 200% (relative to volume)               |
 
 New installs default to **GPS** input and the **physical** engine sound.
 Settings persist in `localStorage`. The physical model has its own deep
@@ -159,7 +166,7 @@ tuning in [`tuner.html`](tuner.html) (linked from Settings).
 ## Known limitations
 
 - **GPS latency.** GPS needs time to work out your speed, so in GPS mode the
-  sound reacts a little *late* to changes — it lags behind sharp
+  sound reacts a little _late_ to changes — it lags behind sharp
   acceleration and braking. This is unavoidable for now: the speed simply
   isn't known any sooner. (The real fix would be an API that reads the
   accelerator pedal directly — if anyone builds that, get in touch. :P)
@@ -191,7 +198,9 @@ adapt it freely, but derived works must keep this license and its copyright
 attribution, and share their source under the same terms.
 
 Special thanks to Baldan, Lachambre, Delle Monache & Boussard, whose paper
-*"Physically informed car engine sound synthesis for virtual and augmented
-environments"* (IEEE VR Workshop on Sonic Interactions for Virtual
-Environments, 2015) informs the physical-model synthesis and makes such a
-convincing real engine sound possible.
+[_"Physically informed car engine sound synthesis for virtual and augmented
+environments"_](https://ieeexplore.ieee.org/document/7361287/) (IEEE VR
+Workshop on Sonic Interactions for Virtual Environments, 2015,
+[free PDF](https://air.iuav.it/retrieve/de164c2a-5461-60ee-e053-3a05fe0a7787/SIVE15_submission_4.pdf))
+informs the physical-model synthesis and makes such a convincing real engine
+sound possible.

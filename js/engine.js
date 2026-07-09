@@ -16,18 +16,21 @@ class EngineSim {
   }
 
   configure(config) {
-    this.cfg = Object.assign({
-      maxRpm: 7000,        // rev limiter
-      idleRpm: 850,
-      maxSpeed: 250,       // km/h at maxRpm in top gear
-      gears: 6,
-      shiftUpRpm: 6200,    // upshift threshold under acceleration
-      shiftDownRpm: 1800,  // downshift threshold
-      shiftTime: 0.30,     // seconds of torque cut while shifting
-      firstGearFrac: 0.19, // fraction of maxSpeed reachable in 1st gear
-      revUpTime: 0.55,     // neutral free-rev: time constant climbing (s)
-      revDownTime: 0.85,   // neutral free-rev: time constant falling (s)
-    }, config);
+    this.cfg = Object.assign(
+      {
+        maxRpm: 7000, // rev limiter
+        idleRpm: 850,
+        maxSpeed: 250, // km/h at maxRpm in top gear
+        gears: 6,
+        shiftUpRpm: 6200, // upshift threshold under acceleration
+        shiftDownRpm: 1800, // downshift threshold
+        shiftTime: 0.3, // seconds of torque cut while shifting
+        firstGearFrac: 0.19, // fraction of maxSpeed reachable in 1st gear
+        revUpTime: 0.55, // neutral free-rev: time constant climbing (s)
+        revDownTime: 0.85, // neutral free-rev: time constant falling (s)
+      },
+      config,
+    );
     this._computeGearing();
     // Reconfiguring mid-drive: the current gear must exist in the new box
     if (this.gear !== undefined && this.gear > this.cfg.gears) {
@@ -51,27 +54,28 @@ class EngineSim {
     }
     for (let i = 0; i < gears; i++) {
       this.gearTopSpeed.push(
-        maxSpeed * (firstGearFrac + (1 - firstGearFrac) * (i / (gears - 1))));
+        maxSpeed * (firstGearFrac + (1 - firstGearFrac) * (i / (gears - 1))),
+      );
     }
   }
 
   reset() {
-    this.speed = 0;          // km/h (smoothed actual)
-    this.targetSpeed = 0;    // km/h (raw input)
-    this.gear = 1;           // 1-based
+    this.speed = 0; // km/h (smoothed actual)
+    this.targetSpeed = 0; // km/h (raw input)
+    this.gear = 1; // 1-based
     this.rpm = this.cfg.idleRpm;
-    this.throttle = 0;       // 0..1 estimated engine load
-    this.accel = 0;          // km/h per second (smoothed)
-    this.shiftTimer = 0;     // >0 while a shift is in progress
-    this.shiftDir = 0;       // +1 up, -1 down
+    this.throttle = 0; // 0..1 estimated engine load
+    this.accel = 0; // km/h per second (smoothed)
+    this.shiftTimer = 0; // >0 while a shift is in progress
+    this.shiftDir = 0; // +1 up, -1 down
     this.aggressiveness = 0; // 0 relaxed .. 1 sporty (driver style estimate)
-    this.braking = false;    // true under hard deceleration
+    this.braking = false; // true under hard deceleration
     this.kickdownInhibit = 0; // no kickdown right after an upshift (no hunting)
-    this.limiting = false;   // latched rev-limiter state (hysteresis)
-    this.limiterPhase = 0;   // rev-limiter flutter phase
-    this.sparkCut = false;   // true during a limiter fuel-cut frame
-    this.neutral = false;    // true = drivetrain disconnected (free rev)
-    this.revDemand = 0;      // 0..1 accelerator position while in neutral
+    this.limiting = false; // latched rev-limiter state (hysteresis)
+    this.limiterPhase = 0; // rev-limiter flutter phase
+    this.sparkCut = false; // true during a limiter fuel-cut frame
+    this.neutral = false; // true = drivetrain disconnected (free rev)
+    this.revDemand = 0; // 0..1 accelerator position while in neutral
   }
 
   /**
@@ -167,7 +171,7 @@ class EngineSim {
     }
     load = Math.max(0, Math.min(1, load));
     // Asymmetric: throttle closes near-instantly, opens progressively
-    const thrTau = load < this.throttle ? 0.045 : (this.neutral ? 0.08 : 0.12);
+    const thrTau = load < this.throttle ? 0.045 : this.neutral ? 0.08 : 0.12;
     this.throttle += (load - this.throttle) * Math.min(1, dt / thrTau);
 
     // --- gear selection (mimics driver / automatic gearbox behavior) ---
@@ -188,7 +192,9 @@ class EngineSim {
       // waiting for the style estimate to catch up.
       const styleNow = Math.max(this.aggressiveness, accelDemand);
       const econUp = Math.min(
-        cfg.idleRpm + 0.28 * (cfg.maxRpm - cfg.idleRpm), cfg.shiftUpRpm);
+        cfg.idleRpm + 0.28 * (cfg.maxRpm - cfg.idleRpm),
+        cfg.shiftUpRpm,
+      );
       const effShiftUp = econUp + (cfg.shiftUpRpm - econUp) * styleNow;
 
       // 1st gear is for launching from a stop, not for rolling downshifts.
@@ -203,11 +209,16 @@ class EngineSim {
         // Mid-braking a driver holds the gear (clutch/converter takes it).
         // Only as the car comes down to a stop do the gears drop through
         // quickly — but still hold 2nd until nearly stopped.
-        if (this.gear > 1 && this.speed < 10 &&
-            (!enteringFirst || canEnterFirst)) {
+        if (
+          this.gear > 1 &&
+          this.speed < 10 &&
+          (!enteringFirst || canEnterFirst)
+        ) {
           this._shift(-1, 0.12);
         }
-      } else if (this.gear < cfg.gears && rpmNow >= effShiftUp &&
+      } else if (
+        this.gear < cfg.gears &&
+        rpmNow >= effShiftUp &&
         (accelerating ||
           // Relaxation upshift: after a hard pull settles into steady
           // cruise, the decaying style estimate lowers effShiftUp until
@@ -224,7 +235,9 @@ class EngineSim {
         // Kickdown: strong demand while below the power band — drop a gear
         // (repeats next frames if more than one gear is needed). Inhibited
         // right after an upshift so a box at full throttle doesn't hunt.
-        this.gear > 1 && accelDemand > 0.55 && this.kickdownInhibit <= 0 &&
+        this.gear > 1 &&
+        accelDemand > 0.55 &&
+        this.kickdownInhibit <= 0 &&
         rpmNow < cfg.shiftUpRpm * 0.72 &&
         this.rpmInGear(this.speed, g - 1) < cfg.shiftUpRpm * 0.95
       ) {
@@ -244,10 +257,11 @@ class EngineSim {
     // the sound stutters (throttle momentarily closed). Latched with
     // hysteresis so it doesn't chatter in and out.
     if (!this.limiting && this.rpm >= cfg.maxRpm - 40) this.limiting = true;
-    else if (this.limiting && this.rpm <= cfg.maxRpm - 520) this.limiting = false;
+    else if (this.limiting && this.rpm <= cfg.maxRpm - 520)
+      this.limiting = false;
     if (this.limiting) {
       this.limiterPhase += dt;
-      this.sparkCut = (this.limiterPhase % 0.13) < 0.065; // ~7.7 Hz
+      this.sparkCut = this.limiterPhase % 0.13 < 0.065; // ~7.7 Hz
     } else {
       this.limiterPhase = 0;
       this.sparkCut = false;
@@ -260,11 +274,15 @@ class EngineSim {
       // Rev-up is non-linear (throttle^1.3) and rate-limited by the
       // configurable time constants (flywheel inertia). Aim slightly past
       // redline so the engine pushes into the limiter instead of creeping.
-      targetRpm = cfg.idleRpm +
+      targetRpm =
+        cfg.idleRpm +
         Math.pow(this.revDemand, 1.3) * (cfg.maxRpm * 1.03 - cfg.idleRpm);
       if (this.sparkCut) targetRpm = cfg.maxRpm - 400; // limiter cut pulls down
-      tau = this.limiting ? 0.045
-        : (targetRpm > this.rpm ? cfg.revUpTime : cfg.revDownTime);
+      tau = this.limiting
+        ? 0.045
+        : targetRpm > this.rpm
+          ? cfg.revUpTime
+          : cfg.revDownTime;
     } else {
       targetRpm = this.rpmInGear(this.speed, this.gear - 1);
       tau = this.shiftTimer > 0 ? 0.16 : 0.09;
@@ -284,9 +302,10 @@ class EngineSim {
     this.shiftDir = dir;
     if (dir > 0) this.kickdownInhibit = 2.5;
     // Sporty driving means faster shifts; explicit duration overrides.
-    this.shiftTimer = duration !== undefined
-      ? duration
-      : this.cfg.shiftTime * (1 - 0.4 * this.aggressiveness);
+    this.shiftTimer =
+      duration !== undefined
+        ? duration
+        : this.cfg.shiftTime * (1 - 0.4 * this.aggressiveness);
   }
 
   /** True while the gearbox is mid-shift (torque cut → sound dips). */
@@ -296,8 +315,8 @@ class EngineSim {
 
   /** Displayed gear: N in neutral or at standstill, otherwise 1..N. */
   get displayGear() {
-    if (this.neutral) return 'N';
-    return this.speed < 0.5 && this.targetSpeed < 0.5 ? 'N' : String(this.gear);
+    if (this.neutral) return "N";
+    return this.speed < 0.5 && this.targetSpeed < 0.5 ? "N" : String(this.gear);
   }
 }
 
