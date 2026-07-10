@@ -153,18 +153,20 @@
     sound.setVolume(settings.volume / 100);
     setSource(settings.source);
     setActiveSound();
-    updateSoundVisibility();
+    updateSettingsVisibility();
     saveSettings();
   }
 
-  // Cylinders only shapes the built-in synth; the tuner only applies to the
-  // physical model — show each control only for the sound engine it affects.
-  function updateSoundVisibility() {
+  // Show each control only where it applies: Cylinders shapes the built-in
+  // synth, the tuner is for the physical model, and speed smoothing only
+  // matters for the (jittery) GPS input.
+  function updateSettingsVisibility() {
     $("row-cylinders").classList.toggle(
       "hidden",
       settings.soundSet !== "synth",
     );
     $("row-tuner").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
   // ---------- Sound engine selection ----------
