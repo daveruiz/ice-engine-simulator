@@ -22,6 +22,13 @@ and let the (silent) EV borrow a combustion soundtrack that follows how you
 actually drive. I don't know about other EVs, but if your car has a browser
 and GPS, it should work there too.
 
+I looked at other projects doing something similar, but they usually needed
+an Arduino or other extra hardware, or were locked to a specific phone brand
+(iPhone-only, for example), and tended to be far less customizable. This one
+runs straight in the browser — no hardware, no app store, no walled garden —
+and every part of the engine (RPM range, gear count, shift points, cylinder
+count, sound engine, and more) is tweakable from the settings panel.
+
 ## Live app
 
 **https://daveruiz.github.io/ice-engine-simulator/**
