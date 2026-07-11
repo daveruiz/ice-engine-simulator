@@ -41,12 +41,14 @@ html, body {
 }
 .start-card { text-align: center; padding: 24px; }
 .start-card h1 {
+  max-width: 100%;
   font-size: clamp(2rem, 8vw, 4rem);
   letter-spacing: 0.35em;
   font-weight: 200;
 }
 .start-card p { color: var(--dim); margin: 12px 0 32px; }
 .start-card .hint { font-size: 0.8rem; margin-top: 24px; }
+.start-card .hint.car-hint { margin-top: 12px; color: var(--dim); }
 #btn-start {
   font-size: clamp(1.2rem, 4vw, 1.6rem);
   letter-spacing: 0.2em;
@@ -563,4 +565,14 @@ body.tuner-page {
   #center-stack { order: 3; flex: 1 1 100%; flex-direction: row; justify-content: center; }
   #pedal-controls { height: clamp(120px, 22vh, 200px); }
   #gps-status { height: clamp(110px, 20vh, 180px); }
+}
+
+/* Small phones: tighten up spacing/sizing so nothing overflows or wastes space. */
+@media (max-width: 480px) {
+  .start-card { padding: 16px; }
+  .start-card h1 { font-size: clamp(1.5rem, 12vw, 2.5rem); letter-spacing: 0.18em; }
+  .start-card p { margin: 8px 0 20px; }
+  .start-card .hint { font-size: 0.72rem; margin-top: 16px; }
+  .start-card .hint.car-hint { margin-top: 10px; }
+  #btn-start { font-size: clamp(1rem, 5vw, 1.2rem); padding: 14px 32px; }
 }
