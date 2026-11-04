@@ -1,16 +1,48 @@
-/* ICE Simulator — dark automotive dashboard theme */
+/* ICE Simulator — dark automotive instrument-cluster theme.
+   Layout: one flexing dashboard (two dials + a center stack of shift
+   lights / gear / load) between a slim engine picker and the controls. */
 
+/* ---------- Fonts (self-hosted Barlow, SIL OFL — fonts/OFL.txt) ---------- */
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-display: swap;
+  src: url("../fonts/barlow-condensed-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap;
+  src: url("../fonts/barlow-condensed-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-display: swap;
+  src: url("../fonts/barlow-condensed-700.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 400; font-display: swap;
+  src: url("../fonts/barlow-400.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 500; font-display: swap;
+  src: url("../fonts/barlow-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 600; font-display: swap;
+  src: url("../fonts/barlow-600.woff2") format("woff2"); }
+
+/* ---------- Tokens ---------- */
 :root {
+  /* surfaces (blue-black, biased toward the cyan accent) */
   --bg: #0b0e13;
   --panel: #12161f;
   --panel-2: #1a2030;
   --line: #2a3245;
+  --line-2: #3d4862;
+  /* text */
   --text: #e8edf5;
   --dim: #8a93a6;
-  --accent: #ff5a1f;      /* rev / warning orange */
+  --faint: #5a6378;
+  /* accents & semantic */
+  --accent: #ff5a1f;      /* rev / needle orange */
   --accent-2: #2fd0ff;    /* cyan detail */
   --redline: #ff2d3a;
+  --amber: #ffb020;
   --ok: #45e07c;
+
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --f-body: "Barlow", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --r-sm: 10px;           /* buttons, inputs */
+  --r-md: 16px;           /* panels, pedals */
+  --ctl-h: 48px;          /* minimum touch-control height */
+  --gutter: max(16px, 4vw);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%232fd0ff' stroke-width='2'/%3E%3C/svg%3E");
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -19,7 +51,7 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--f-body);
   overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
@@ -29,6 +61,51 @@ html, body {
 
 .hidden { display: none !important; }
 
+a { color: var(--accent-2); text-decoration-color: rgba(47, 208, 255, 0.4); text-underline-offset: 2px; }
+
+/* ---------- Buttons (one family, a few variants) ---------- */
+.bar-btn, .quick, .seg-btn, .mode-btn, #btn-start, #btn-preset-restore {
+  font-family: var(--f-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms, transform 80ms;
+}
+.bar-btn, .quick {
+  min-height: var(--ctl-h);
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+  letter-spacing: 0.14em;
+}
+.bar-btn:active, .quick:active, .seg-btn:active, .mode-btn:active {
+  background: var(--panel-2);
+  transform: scale(0.985);
+}
+:is(.bar-btn, .quick, .seg-btn, .mode-btn, #btn-start, #btn-preset-restore, select, input):focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  :is(.bar-btn, .quick, .seg-btn, .mode-btn):hover { border-color: var(--line-2); }
+}
+.bar-btn.primary {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #2a1408, #1a0c05);
+  box-shadow: 0 0 22px rgba(255, 90, 31, 0.18);
+}
+.bar-btn.danger { border-color: rgba(255, 45, 58, 0.6); color: var(--redline); }
+.link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 /* ---------- Start overlay ---------- */
 #start-overlay {
   position: fixed;
@@ -36,33 +113,69 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at 50% 30%, #16203a 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 35%, #16203a 0%, var(--bg) 68%);
   z-index: 100;
+  padding: 24px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
 }
-.start-card { text-align: center; padding: 24px; }
+.start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 560px;
+}
+.start-dial { width: min(240px, 56vw); height: auto; margin-bottom: -6px; }
+.dial-track { fill: none; stroke: var(--line); stroke-width: 3; }
+.dial-red { fill: none; stroke: var(--redline); stroke-width: 5; opacity: 0.85; }
+.dial-ticks line { stroke: var(--dim); stroke-width: 2; stroke-linecap: round; }
+.dial-ticks line.major { stroke: var(--text); stroke-width: 3; }
+.dial-ticks line.red { stroke: var(--redline); stroke-width: 3; }
+.dial-needle { stroke: var(--accent); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255, 90, 31, 0.8)); }
+.dial-hub { fill: #1d2434; stroke: var(--line-2); stroke-width: 2; }
 .start-card h1 {
-  max-width: 100%;
-  font-size: clamp(2rem, 8vw, 4rem);
-  letter-spacing: 0.35em;
-  font-weight: 200;
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: clamp(2.2rem, 9vw, 4.2rem);
+  letter-spacing: 0.24em;
+  line-height: 1;
+  margin-right: -0.24em; /* optically recentre the tracked title */
+  text-wrap: balance;
 }
-.start-card p { color: var(--dim); margin: 12px 0 32px; }
-.start-card .hint { font-size: 0.8rem; margin-top: 24px; }
-.start-card .hint.car-hint { margin-top: 12px; color: var(--dim); }
+.start-card h1 span { color: var(--accent); }
+.start-sub { color: var(--dim); margin: 14px 0 32px; font-size: clamp(0.95rem, 2.8vw, 1.1rem); }
 #btn-start {
-  font-size: clamp(1.2rem, 4vw, 1.6rem);
-  letter-spacing: 0.2em;
-  padding: 20px 48px;
-  border-radius: 60px;
+  font-size: clamp(1.25rem, 4.4vw, 1.6rem);
+  letter-spacing: 0.22em;
+  padding: 18px 48px;
+  border-radius: 999px;
   border: 2px solid var(--accent);
   background: linear-gradient(180deg, #2a1408, #180b04);
   color: var(--accent);
-  cursor: pointer;
   box-shadow: 0 0 40px rgba(255, 90, 31, 0.25);
 }
 #btn-start:active { transform: scale(0.97); }
+.car-hint {
+  margin-top: 28px;
+  max-width: 42ch;
+  color: var(--dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.chip {
+  display: inline-block;
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  color: var(--accent-2);
+  border: 1px solid rgba(47, 208, 255, 0.45);
+  border-radius: 999px;
+  padding: 1px 8px 0;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
 
-/* ---------- Layout ---------- */
+/* ---------- App layout ---------- */
 #app {
   height: 100%;
   display: flex;
@@ -70,184 +183,252 @@ html, body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
            env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+/* Rows that hold controls stay readable on very wide screens */
+#top-bar, #controls, #bottom-bar {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+/* ---------- Top bar: engine preset picker ---------- */
+#top-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px var(--gutter) 0;
+  min-width: 0;
+}
+#top-bar label {
+  font-family: var(--f-display);
+  font-weight: 600;
+  color: var(--accent-2);
+  font-size: 0.8rem;
+  letter-spacing: 0.3em;
+  flex: 0 0 auto;
+}
+.top-picker { position: relative; flex: 1 1 auto; min-width: 0; max-width: 620px; }
+#top-preset {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 40px 0 14px;
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+  letter-spacing: 0.03em;
+  color: var(--text);
+  background: var(--panel) var(--chevron) no-repeat right 14px center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  -webkit-appearance: none;
+  appearance: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+#top-preset option, #top-preset optgroup { background: var(--panel); color: var(--text); font-family: var(--f-body); }
+#top-spec {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  pointer-events: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#btn-preset-restore {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 1.25rem;
+  line-height: 1;
+}
 
 /* ---------- Dashboard ---------- */
 #dashboard {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2vw;
-  padding: 2vh 2vw 0;
+  gap: clamp(8px, 2vw, 32px);
+  padding: 1.5vh var(--gutter) 0;
 }
+/* Landscape: dials fill the dashboard height (never clipped), capped by width */
 .gauge-wrap {
   position: relative;
-  flex: 1 1 0;
-  max-width: 44vh;
+  flex: 0 1 auto;
+  height: min(100%, 40vw);
   aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 0;
 }
-.gauge-wrap canvas { width: 100%; height: 100%; }
-.gauge-label {
-  position: absolute;
-  bottom: 8%;
-  width: 100%;
-  text-align: center;
-  color: var(--dim);
-  font-size: clamp(0.6rem, 1.8vw, 0.9rem);
-  letter-spacing: 0.2em;
-}
+.gauge-wrap canvas { width: 100%; height: 100%; display: block; }
 
 #center-stack {
+  flex: 0 0 auto;
+  width: clamp(104px, 13vw, 170px);
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
 }
+
+/* Shift lights: green → amber → red, flashing at the shift point */
+#shift-lights {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #07090d;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+#shift-lights i {
+  --led: var(--ok);
+  flex: 1;
+  aspect-ratio: 1;
+  max-width: 14px;
+  border-radius: 50%;
+  background: #1b2130;
+  transition: background 60ms, box-shadow 60ms;
+}
+#shift-lights i:nth-child(n+4) { --led: var(--amber); }
+#shift-lights i:nth-child(n+7) { --led: var(--redline); }
+#shift-lights i.on { background: var(--led); box-shadow: 0 0 8px var(--led); }
+#shift-lights.flash i { --led: var(--redline); animation: shift-flash 140ms steps(1) infinite; }
+@keyframes shift-flash { 50% { background: #1b2130; box-shadow: none; } }
+
 #gear-display {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px 26px;
-  min-width: 90px;
+  border-radius: var(--r-md);
+  padding: 10px 12px 8px;
 }
 #gear-value {
-  font-size: clamp(2.6rem, 9vw, 5rem);
+  font-family: var(--f-display);
   font-weight: 700;
-  line-height: 1;
+  font-size: clamp(3.2rem, 8vw, 5.6rem);
+  line-height: 0.95;
   color: var(--accent-2);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 24px rgba(47, 208, 255, 0.25);
 }
-.gear-caption {
-  color: var(--dim);
-  font-size: 0.7rem;
-  letter-spacing: 0.3em;
-  margin-top: 6px;
-}
-#shift-light {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #333;
-  border: 1px solid var(--line);
-  transition: background 80ms, box-shadow 80ms;
-}
-#shift-light.on {
-  background: var(--redline);
-  box-shadow: 0 0 18px var(--redline);
-}
-
-/* ---------- Readouts ---------- */
-#readouts {
-  display: flex;
-  justify-content: center;
-  gap: 4vw;
-  padding: 1vh 2vw;
-}
-.readout {
-  text-align: center;
-  min-width: 90px;
-}
-.readout span {
-  font-size: clamp(1.4rem, 5vw, 2.2rem);
+.gear-caption, .load-head span {
+  font-family: var(--f-display);
   font-weight: 600;
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.3em;
+}
+.gear-caption { margin-top: 4px; margin-right: -0.3em; }
+
+#load-meter { display: flex; flex-direction: column; gap: 5px; }
+.load-head { display: flex; justify-content: space-between; align-items: baseline; }
+.load-head output {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.readout.big span { color: var(--accent-2); }
-.readout label {
-  display: block;
-  color: var(--dim);
-  font-size: 0.65rem;
-  letter-spacing: 0.25em;
-  margin-top: 2px;
+.load-track { height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+#load-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  background-size: var(--load-bg, 100%) 100%;
+  transition: width 80ms linear;
 }
 
 /* ---------- Controls ---------- */
-#controls { padding: 1vh 4vw 1.5vh; }
+#controls { padding: 1.2vh var(--gutter) 1.2vh; }
 
-#speed-slider {
+/* Range inputs: filled up to the thumb via --p (set from JS) */
+input[type="range"] {
+  --fill: var(--accent-2);
+  --p: 0%;
   width: 100%;
-  height: 56px;
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
   cursor: pointer;
 }
-#speed-slider::-webkit-slider-runnable-track {
-  height: 14px;
-  border-radius: 8px;
-  background: linear-gradient(90deg, var(--panel-2), #3a2a15);
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
   border: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--fill) 0 var(--p), var(--panel-2) var(--p) 100%);
 }
-#speed-slider::-webkit-slider-thumb {
+input[type="range"]::-moz-range-track { height: 8px; border-radius: 4px; background: var(--panel-2); }
+input[type="range"]::-moz-range-progress { height: 8px; border-radius: 4px; background: var(--fill); }
+input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 44px;
-  height: 44px;
-  margin-top: -16px;
+  width: 26px;
+  height: 26px;
+  margin-top: -10px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffb08a, var(--accent));
-  border: 2px solid #00000055;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+  background: var(--text);
+  border: 5px solid var(--fill);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
-#speed-slider::-moz-range-track {
-  height: 14px;
-  border-radius: 8px;
-  background: #3a2a15;
-  border: 1px solid var(--line);
-}
-#speed-slider::-moz-range-thumb {
-  width: 44px;
-  height: 44px;
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid #00000055;
+  background: var(--text);
+  border: 5px solid var(--fill);
 }
 
-.quick-buttons {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
+#speed-slider { --fill: var(--accent); height: 52px; }
+#speed-slider::-webkit-slider-runnable-track { height: 12px; border-radius: 6px; }
+#speed-slider::-webkit-slider-thumb {
+  width: 40px;
+  height: 40px;
+  margin-top: -15px;
+  border: 0;
+  background: radial-gradient(circle at 35% 35%, #ffb08a, var(--accent));
+  box-shadow: 0 0 0 4px rgba(255, 90, 31, 0.18), 0 2px 10px rgba(0, 0, 0, 0.6);
 }
-.quick {
-  flex: 1;
-  padding: 14px 0;
-  font-size: clamp(0.75rem, 2.5vw, 1rem);
-  letter-spacing: 0.15em;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-.quick:active { background: var(--panel-2); }
+#speed-slider::-moz-range-thumb { width: 36px; height: 36px; border: 0; background: var(--accent); }
+
+.quick-buttons { display: flex; gap: 8px; margin-top: 4px; }
+.quick { flex: 1; padding: 0 4px; }
 
 /* Pedals: press amount = vertical touch position (low = hard press) */
 #pedal-controls {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   height: clamp(130px, 24vh, 220px);
-  padding: 4px 2vw;
 }
 .pedal {
   position: relative;
   flex: 1;
-  border-radius: 18px;
-  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
   background:
     repeating-linear-gradient(0deg,
-      transparent 0 14px, rgba(255,255,255,0.04) 14px 16px),
+      transparent 0 14px, rgba(255, 255, 255, 0.035) 14px 16px),
     linear-gradient(180deg, var(--panel-2), var(--panel));
   overflow: hidden;
   cursor: pointer;
   touch-action: none; /* keep touches on the pedal, no scrolling */
   -webkit-user-select: none;
   user-select: none;
+  transition: border-color 120ms;
 }
 .pedal.gas { flex: 0.8; }
 .pedal-fill {
@@ -257,275 +438,214 @@ html, body {
   transition: height 60ms linear;
   pointer-events: none;
 }
-.pedal.gas .pedal-fill {
-  background: linear-gradient(180deg, rgba(69,224,124,0.15), rgba(69,224,124,0.55));
-}
-.pedal.brake .pedal-fill {
-  background: linear-gradient(180deg, rgba(255,45,58,0.15), rgba(255,45,58,0.55));
-}
-.pedal.pressed { border-color: var(--dim); }
-/* N/D gear selector between the pedals */
-#gear-selector {
-  flex: 0 0 clamp(56px, 9vw, 84px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.mode-btn {
-  flex: 1;
-  border-radius: 14px;
-  border: 2px solid var(--line);
-  background: var(--panel);
-  color: var(--dim);
-  font-size: clamp(1.2rem, 4vw, 1.8rem);
-  font-weight: 700;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.mode-btn.active {
-  color: var(--accent-2);
-  border-color: var(--accent-2);
-  box-shadow: 0 0 14px rgba(47, 208, 255, 0.25) inset;
-}
-
+.pedal.gas .pedal-fill { background: linear-gradient(180deg, rgba(69, 224, 124, 0.12), rgba(69, 224, 124, 0.5)); }
+.pedal.brake .pedal-fill { background: linear-gradient(180deg, rgba(255, 45, 58, 0.12), rgba(255, 45, 58, 0.5)); }
+.pedal.gas.pressed { border-color: var(--ok); }
+.pedal.brake.pressed { border-color: var(--redline); }
 .pedal-label {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  font-size: clamp(0.9rem, 3vw, 1.3rem);
-  letter-spacing: 0.35em;
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: clamp(1.05rem, 3.2vw, 1.4rem);
+  letter-spacing: 0.32em;
+  margin-left: 0.16em;
   color: var(--text);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
+/* N/D gear selector between the pedals */
+#gear-selector {
+  flex: 0 0 clamp(58px, 9vw, 84px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mode-btn {
+  flex: 1;
+  border-radius: var(--r-sm);
+  color: var(--dim);
+  font-size: clamp(1.4rem, 4.4vw, 2rem);
+  font-weight: 700;
+}
+.mode-btn.active {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+  background: var(--panel-2);
+  box-shadow: 0 0 16px rgba(47, 208, 255, 0.2) inset;
+}
 
+/* GPS: rev pedal + status card */
 #gps-status {
   display: flex;
   align-items: stretch;
-  gap: 16px;
+  gap: 12px;
   height: clamp(120px, 20vh, 180px);
-  padding: 4px 2vw;
-  color: var(--dim);
 }
-#rev-pedal { flex: 0 0 clamp(72px, 16vw, 120px); }
+#rev-pedal { flex: 0 0 clamp(84px, 18vw, 140px); }
 .gps-info {
   flex: 1;
+  min-width: 0;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
 }
-.gps-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--dim);
+.gps-head { display: flex; align-items: center; gap: 8px; }
+.gps-tag {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: var(--dim);
 }
-#gps-status.fix .gps-dot {
-  background: var(--ok);
-  box-shadow: 0 0 10px var(--ok);
-}
+.gps-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+#gps-status.fix .gps-dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
 #gps-status.error .gps-dot { background: var(--redline); }
+#gps-message {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: clamp(1.1rem, 3.6vw, 1.5rem);
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+#gps-status.error #gps-message { color: var(--redline); }
+.gps-hint { color: var(--dim); font-size: 0.8rem; line-height: 1.4; }
 
 /* ---------- Bottom bar ---------- */
 #bottom-bar {
   display: flex;
   gap: 8px;
-  padding: 0 4vw 1.5vh;
+  padding: 0 var(--gutter) max(1.5vh, 10px);
 }
-.bar-btn {
-  flex: 1;
-  padding: 16px 12px;
-  font-size: clamp(0.8rem, 2.5vw, 1rem);
-  letter-spacing: 0.12em;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-.bar-btn:active { background: var(--panel-2); }
-.bar-btn.danger { border-color: var(--redline); color: var(--redline); }
-.bar-btn.hidden { display: none; }
-
-/* Segmented control (listening position) */
-.seg { display: flex; gap: 6px; }
-.seg-btn {
-  flex: 1;
-  padding: 14px 4px;
-  font-size: clamp(0.72rem, 2.4vw, 0.95rem);
-  letter-spacing: 0.12em;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--dim);
-  cursor: pointer;
-}
-.seg-btn.active {
-  border-color: var(--accent-2);
-  color: var(--text);
-  background: var(--panel-2);
-}
-#listener-hint { margin-top: 0; }
-
-/* ---------- Top bar: engine preset picker ---------- */
-#top-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 1.2vh 4vw 0;
-  min-width: 0;
-}
-#top-bar label {
-  color: var(--accent-2);
-  font-size: 0.7rem;
-  letter-spacing: 0.3em;
-  flex: 0 0 auto;
-}
-#top-preset {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 10px 36px 10px 14px;
-  font-size: clamp(0.85rem, 2.6vw, 1rem);
-  letter-spacing: 0.03em;
-  color: var(--text);
-  background: var(--panel)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%232fd0ff' stroke-width='2'/%3E%3C/svg%3E")
-    no-repeat right 14px center;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  -webkit-appearance: none;
-  appearance: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-  cursor: pointer;
-}
-#top-preset:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-#top-preset option, #top-preset optgroup { background: var(--panel); color: var(--text); }
-#btn-preset-restore {
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid var(--accent);
-  background: var(--panel);
-  color: var(--accent);
-  font-size: 1.2rem;
-  cursor: pointer;
-}
+#bottom-bar .bar-btn { flex: 1; }
 
 /* ---------- Settings panel ---------- */
 #settings-panel {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 10, 0.92);
+  background: var(--bg);
   z-index: 50;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  -webkit-user-select: text;
+  user-select: text;
 }
-.settings-inner {
-  max-width: 640px;
+.settings-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(11, 14, 19, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top);
+}
+.settings-head-inner {
+  max-width: 680px;
   margin: 0 auto;
-  padding: 4vh 5vw 8vh;
-}
-.settings-inner header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 16px;
+  padding: 12px var(--gutter);
 }
-.settings-inner header .bar-btn { flex: 0 0 auto; padding: 12px 20px; }
-.settings-inner h2 { font-weight: 300; letter-spacing: 0.2em; }
-.settings-inner h3 {
+.settings-head h2, #tuner-header h1 {
+  font-family: var(--f-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+}
+.settings-head .bar-btn { min-height: 42px; padding: 0 18px; }
+.settings-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 4px var(--gutter) calc(48px + env(safe-area-inset-bottom));
+}
+.settings-inner h3, #tuner h3 {
+  font-family: var(--f-display);
+  font-weight: 600;
   color: var(--accent-2);
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  margin: 28px 0 10px;
+  margin: 30px 0 14px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 6px;
 }
 .setting-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-#settings-footer {
-  margin-top: 32px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-#settings-footer a {
-  color: var(--accent-2);
-  font-size: 0.85rem;
-  text-decoration: none;
-  letter-spacing: 0.02em;
-}
-#settings-footer a:hover { text-decoration: underline; }
-#settings-footer span {
-  color: var(--dim);
-  font-size: 0.75rem;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  gap: 8px;
+  margin-bottom: 20px;
 }
 .setting-row label {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
   color: var(--dim);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.setting-row output {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.setting-row select, #tuner select {
+  min-height: var(--ctl-h);
+  padding: 0 42px 0 14px;
+  font-family: var(--f-body);
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--panel) var(--chevron) no-repeat right 16px center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.setting-row select option { background: var(--panel); color: var(--text); }
+.setting-row input[type="range"] { height: 36px; }
+.hint { color: var(--dim); font-size: 0.85rem; line-height: 1.5; }
+.reset-row { margin-top: 32px; }
+
+/* Segmented control (listening position) */
+.seg { display: flex; gap: 6px; }
+.seg-btn {
+  flex: 1;
+  min-height: var(--ctl-h);
+  padding: 0 4px;
+  border-radius: var(--r-sm);
+  font-size: clamp(0.9rem, 2.6vw, 1.05rem);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+.seg-btn.active {
+  border-color: var(--accent-2);
+  color: var(--text);
+  background: var(--panel-2);
+  box-shadow: 0 0 16px rgba(47, 208, 255, 0.15) inset;
+}
+
+#settings-footer {
+  margin-top: 36px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  text-align: center;
   font-size: 0.9rem;
 }
-.setting-row output { color: var(--text); font-weight: 600; }
-.setting-row select {
-  padding: 14px;
-  font-size: 1rem;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.setting-row input[type="range"] {
-  width: 100%;
-  height: 40px;
-  appearance: none;
-  -webkit-appearance: none;
-  background: transparent;
-}
-.setting-row input[type="range"]::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-}
-.setting-row input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 30px;
-  height: 30px;
-  margin-top: -12px;
-  border-radius: 50%;
-  background: var(--accent-2);
-  border: 2px solid #00000055;
-}
-.setting-row input[type="range"]::-moz-range-track {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--panel-2);
-}
-.setting-row input[type="range"]::-moz-range-thumb {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--accent-2);
-  border: 2px solid #00000055;
-}
-.hint { color: var(--dim); font-size: 0.8rem; line-height: 1.5; margin-top: 20px; }
 
 /* ---------- Engine tuner page (tuner.html) ---------- */
 /* The tuner is a normal scrolling document, unlike the app screen
@@ -536,11 +656,10 @@ body.tuner-page {
   -webkit-user-select: text;
   user-select: text;
 }
-
 #tuner {
-  max-width: 640px;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 3vh 5vw 10vh;
+  padding: calc(20px + env(safe-area-inset-top)) var(--gutter) calc(64px + env(safe-area-inset-bottom));
 }
 #tuner-header {
   display: flex;
@@ -549,106 +668,176 @@ body.tuner-page {
   gap: 16px;
   margin-bottom: 20px;
 }
-#tuner-header h1 {
-  font-weight: 200;
-  letter-spacing: 0.25em;
-  font-size: clamp(1.3rem, 5vw, 2rem);
-}
-#tuner-header .hint { margin-top: 8px; }
-#tuner h3 {
-  color: var(--accent-2);
-  font-size: 0.75rem;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  margin: 28px 0 10px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 6px;
-}
-.link-btn {
-  display: inline-block;
-  text-align: center;
-  text-decoration: none;
-  color: var(--text);
-}
+#tuner-header .hint { margin-top: 6px; max-width: 60ch; }
+#tuner-header .bar-btn { flex: 0 0 auto; min-height: 42px; }
+#tuner-side { display: flex; flex-direction: column; gap: 4px; }
 
 #bench {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--r-md);
   padding: 16px;
 }
 #bench-row {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 #bench-row .bar-btn { flex: 0 0 auto; }
-.bench-readout { text-align: center; min-width: 64px; }
+.bench-readout { text-align: center; min-width: 60px; }
 .bench-readout span {
-  font-size: clamp(1.2rem, 4vw, 1.8rem);
-  font-weight: 600;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(1.5rem, 5vw, 2rem);
   font-variant-numeric: tabular-nums;
   color: var(--accent-2);
 }
 .bench-readout label {
   display: block;
+  font-family: var(--f-display);
+  font-weight: 600;
   color: var(--dim);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   letter-spacing: 0.25em;
   margin-top: 2px;
 }
-#bench .quick-buttons { margin-top: 8px; }
+#bench .quick-buttons { margin-top: 8px; flex-wrap: wrap; }
+#bench .quick { flex: 1 1 calc(25% - 8px); min-width: 0; font-size: 0.95rem; letter-spacing: 0.1em; }
+#bench .hint { margin-top: 12px; }
+#preset-load .quick-buttons { margin-top: 0; }
 
-#tuner .setting-row input[type="range"] { height: 34px; }
-#tuner .setting-row { margin-bottom: 12px; }
+#tuner .setting-row { margin-bottom: 14px; }
+#tuner .setting-row input[type="range"] { height: 32px; }
+.pgroup { break-inside: avoid; padding-bottom: 6px; }
+
+/* Booleans as toggle switches */
 .param-check {
-  width: 26px;
-  height: 26px;
-  accent-color: var(--accent-2);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 50px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms;
 }
+.param-check::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: transform 150ms, background 150ms;
+}
+.param-check:checked { background: rgba(47, 208, 255, 0.25); border-color: var(--accent-2); }
+.param-check:checked::before { transform: translateX(22px); background: var(--accent-2); }
+
 #preset-io textarea {
   width: 100%;
   margin-top: 10px;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 0.8rem;
+  resize: vertical;
 }
 
-/* Controls and readouts must never be squeezed off-screen by the
-   gauges — the dashboard is the flexible region, everything below it
-   keeps its size. */
-#readouts, #controls, #bottom-bar { flex-shrink: 0; }
-#dashboard { overflow: hidden; }
+/* Wide screens: bench stays in view on the left, parameters flow in two
+   columns on the right */
+@media (min-width: 1100px) {
+  #tuner {
+    max-width: 1320px;
+    display: grid;
+    grid-template-columns: minmax(360px, 420px) 1fr;
+    grid-template-areas: "head head" "side params" "side io";
+    column-gap: 40px;
+    align-items: start;
+  }
+  #tuner-header { grid-area: head; }
+  #preset-io { grid-area: io; }
+  #tuner-side {
+    grid-area: side;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+  #tuner-params { grid-area: params; columns: 2 300px; column-gap: 36px; }
+  #tuner-params .pgroup h3 { margin-top: 0; }
+  #tuner-params .pgroup { padding-bottom: 22px; }
+}
 
-/* Landscape phones / Tesla screen: everything already flexes.
-   Portrait phones: stack gauges tighter, capped by viewport height so
-   the pedals/slider always fit below without scrolling. */
+/* ---------- Responsive ---------- */
+/* Portrait: the tachometer is the star (big, on top); the speedometer
+   sits below it next to the gear / shift lights / load block */
 @media (orientation: portrait) {
-  #dashboard { flex-wrap: wrap; gap: 0; align-content: center; }
-  .gauge-wrap { flex: 1 1 45%; max-width: min(48vw, 30vh); }
-  #center-stack { order: 3; flex: 1 1 100%; flex-direction: row; justify-content: center; }
-  #pedal-controls { height: clamp(120px, 22vh, 200px); }
-  #gps-status { height: clamp(110px, 20vh, 180px); }
+  #dashboard {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "tacho tacho" "speedo stack";
+    justify-content: center;
+    align-content: center;
+    justify-items: center;
+    align-items: center;
+    column-gap: 5vw;
+    row-gap: 0;
+    padding-left: 3vw;
+    padding-right: 3vw;
+  }
+  .gauge-wrap { height: auto; }
+  .tacho-wrap { grid-area: tacho; width: min(80vw, 37vh); }
+  .speedo-wrap { grid-area: speedo; width: min(46vw, 23vh); margin-top: -3vh; }
+  #center-stack { grid-area: stack; width: min(38vw, 180px); }
+  #pedal-controls { height: clamp(120px, 21vh, 200px); }
+  #gps-status { height: clamp(116px, 19vh, 170px); }
 }
 
-/* Small phones: tighten up spacing/sizing so nothing overflows or wastes space. */
-@media (max-width: 480px) {
-  .start-card { padding: 16px; }
-  .start-card h1 { font-size: clamp(1.5rem, 12vw, 2.5rem); letter-spacing: 0.18em; }
-  .start-card p { margin: 8px 0 20px; }
-  .start-card .hint { font-size: 0.72rem; margin-top: 16px; }
-  .start-card .hint.car-hint { margin-top: 10px; }
-  #btn-start { font-size: clamp(1rem, 5vw, 1.2rem); padding: 14px 32px; }
+/* Short portrait phones: tighter center block */
+@media (orientation: portrait) and (max-height: 700px) {
+  .tacho-wrap { width: min(72vw, 34vh); }
+  .speedo-wrap { width: min(42vw, 21vh); }
+  #gear-display { padding: 4px 10px 2px; }
+  #gear-value { font-size: 2.6rem; }
+  #center-stack { gap: 6px; }
 }
 
-/* Short landscape screens (phones on their side): keep the picker slim */
+/* Short landscape screens (phones on their side): squeeze the chrome */
 @media (max-height: 500px) {
+  .start-dial { display: none; }
+  .start-card h1 { font-size: clamp(2rem, 12vh, 3.2rem); }
+  .start-sub { margin: 10px 0 20px; }
+  .car-hint { margin-top: 16px; }
+  :root { --ctl-h: 40px; }
   #top-bar { padding-top: 4px; gap: 8px; }
-  #top-preset { padding: 6px 32px 6px 10px; font-size: 0.8rem; }
-  #btn-preset-restore { width: 30px; height: 30px; font-size: 1rem; }
+  #top-preset { min-height: 32px; font-size: 0.95rem; }
+  #btn-preset-restore { width: 32px; height: 32px; font-size: 1rem; }
+  #dashboard { padding-top: 4px; }
+  #center-stack { gap: 6px; }
+  #gear-display { padding: 4px 10px 4px; }
+  #gear-value { font-size: clamp(2.2rem, 12vh, 3.6rem); }
+  #pedal-controls, #gps-status { height: clamp(84px, 26vh, 120px); }
+  #speed-slider { height: 40px; }
+  .gps-hint { display: none; }
+}
+
+/* Narrow screens: the spec next to the engine name doesn't fit */
+@media (max-width: 640px) {
+  #top-spec { display: none; }
+}
+@media (max-width: 380px) {
+  #top-bar label { display: none; }
+}
+@media (max-width: 480px) {
+  #bench-row { flex-wrap: wrap; gap: 12px; }
+  #bench-row .bar-btn { flex: 1 1 100%; }
+  .bench-readout { flex: 1; }
 }

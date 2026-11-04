@@ -23,7 +23,9 @@
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
   <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-  <link rel="stylesheet" href="css/style.css?v=34" />
+  <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/style.css?v=35" />
 </head>
 
 <body>
@@ -31,11 +33,18 @@
   <!-- Start overlay: browsers require a user gesture to start audio -->
   <div id="start-overlay">
     <div class="start-card">
-      <h1>ICE SIMULATOR</h1>
-      <p>Combustion engine sound for your electric car</p>
+      <svg class="start-dial" viewBox="0 0 200 160" aria-hidden="true">
+        <path d="M 38.7 151.4 A 80 80 0 1 1 161.3 151.4" class="dial-track" />
+        <path d="M 180.0 102.8 A 80 80 0 0 1 161.3 151.4" class="dial-red" />
+        <g class="dial-ticks"><line x1="43.3" y1="147.6" x2="52.5" y2="139.9" class="major"/><line x1="34.1" y1="133.6" x2="39.4" y2="130.9"/><line x1="28.2" y1="117.9" x2="34.0" y2="116.5"/><line x1="26.0" y1="101.3" x2="32.0" y2="101.2"/><line x1="27.6" y1="84.6" x2="39.4" y2="87.1" class="major"/><line x1="32.9" y1="68.7" x2="38.4" y2="71.3"/><line x1="41.7" y1="54.4" x2="46.4" y2="58.1"/><line x1="53.4" y1="42.5" x2="57.2" y2="47.2"/><line x1="67.6" y1="33.5" x2="72.8" y2="44.3" class="major"/><line x1="83.4" y1="27.9" x2="84.7" y2="33.7"/><line x1="100.0" y1="26.0" x2="100.0" y2="32.0"/><line x1="116.6" y1="27.9" x2="115.3" y2="33.7"/><line x1="132.4" y1="33.5" x2="127.2" y2="44.3" class="major"/><line x1="146.6" y1="42.5" x2="142.8" y2="47.2"/><line x1="158.3" y1="54.4" x2="153.6" y2="58.1"/><line x1="167.1" y1="68.7" x2="161.6" y2="71.3"/><line x1="172.4" y1="84.6" x2="160.6" y2="87.1" class="major"/><line x1="174.0" y1="101.3" x2="168.0" y2="101.2"/><line x1="171.8" y1="117.9" x2="166.0" y2="116.5" class="red"/><line x1="165.9" y1="133.6" x2="160.6" y2="130.9" class="red"/><line x1="156.7" y1="147.6" x2="147.5" y2="139.9" class="red"/></g>
+        <line x1="100" y1="100" x2="46.7" y2="117.3" class="dial-needle" />
+        <circle cx="100" cy="100" r="7" class="dial-hub" />
+      </svg>
+      <h1><span>ICE</span> SIMULATOR</h1>
+      <p class="start-sub">Combustion engine sound for your electric car</p>
       <button id="btn-start">START ENGINE</button>
-      <p class="hint car-hint">💡 For GPS speed, open this in your car's browser. Phone via Bluetooth
-        works too, but with some audio latency.</p>
+      <p class="car-hint"><span class="chip">GPS</span> Open this in your car's browser for GPS speed.
+        A phone over Bluetooth works too, with some audio latency.</p>
     </div>
   </div>
 
@@ -44,37 +53,37 @@
     <!-- Engine preset picker (js/engine-presets.js) -->
     <header id="top-bar">
       <label for="top-preset">ENGINE</label>
-      <select id="top-preset" aria-label="Engine preset"></select>
+      <div class="top-picker">
+        <select id="top-preset" aria-label="Engine preset"></select>
+        <span id="top-spec" aria-hidden="true"></span>
+      </div>
       <button id="btn-preset-restore" class="hidden" title="Restore the preset (undo your tweaks)"
         aria-label="Restore preset">↺</button>
     </header>
 
     <!-- Dashboard -->
     <section id="dashboard">
-      <div class="gauge-wrap">
-        <canvas id="tacho"></canvas>
-        <div class="gauge-label">RPM ×1000</div>
+      <div class="gauge-wrap tacho-wrap">
+        <canvas id="tacho" aria-label="Tachometer"></canvas>
       </div>
 
       <div id="center-stack">
+        <div id="shift-lights" aria-hidden="true" title="Shift lights">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
         <div id="gear-display">
           <span id="gear-value">N</span>
           <span class="gear-caption">GEAR</span>
         </div>
-        <div id="shift-light" title="Shift indicator"></div>
+        <div id="load-meter" aria-label="Engine load">
+          <div class="load-head"><span>LOAD</span><output id="load-value">0%</output></div>
+          <div class="load-track"><div id="load-fill"></div></div>
+        </div>
       </div>
 
-      <div class="gauge-wrap">
-        <canvas id="speedo"></canvas>
-        <div class="gauge-label" id="speed-unit-label">km/h</div>
+      <div class="gauge-wrap speedo-wrap">
+        <canvas id="speedo" aria-label="Speedometer"></canvas>
       </div>
-    </section>
-
-    <!-- Digital readouts -->
-    <section id="readouts">
-      <div class="readout"><span id="ro-rpm">0</span><label>RPM</label></div>
-      <div class="readout big"><span id="ro-speed">0</span><label id="ro-speed-unit">km/h</label></div>
-      <div class="readout"><span id="ro-throttle">0</span><label>LOAD %</label></div>
     </section>
 
     <!-- Speed input -->
@@ -109,8 +118,10 @@
           <span class="pedal-label">REV</span>
         </div>
         <div class="gps-info">
-          <span class="gps-dot"></span>
+          <div class="gps-head"><span class="gps-dot"></span><span class="gps-tag">GPS</span></div>
           <span id="gps-message">Waiting for GPS fix…</span>
+          <p class="gps-hint">Hold REV to blip the engine: higher on the pedal is a light press,
+            lower is full throttle.</p>
         </div>
       </div>
     </section>
@@ -123,12 +134,57 @@
   </main>
 
   <!-- Settings panel -->
-  <div id="settings-panel" class="hidden">
-    <div class="settings-inner">
-      <header>
-        <h2>Settings</h2>
+  <div id="settings-panel" class="hidden" role="dialog" aria-labelledby="settings-title">
+    <header class="settings-head">
+      <div class="settings-head-inner">
+        <h2 id="settings-title">Settings</h2>
         <button id="btn-settings-close" class="bar-btn">✕ CLOSE</button>
-      </header>
+      </div>
+    </header>
+    <div class="settings-inner">
+
+      <h3>Sound</h3>
+      <div class="setting-row">
+        <label for="set-soundset">Sound engine</label>
+        <select id="set-soundset">
+          <option value="synth">Synthesized (built-in)</option>
+        </select>
+        <p class="hint" id="soundset-hint">Loading engine library…</p>
+      </div>
+      <div class="setting-row" id="row-listener">
+        <label>Listening position</label>
+        <div class="seg" id="listener-seg" role="group" aria-label="Listening position">
+          <button class="seg-btn" data-listener="original">ORIGINAL</button>
+          <button class="seg-btn" data-listener="cabin">INSIDE</button>
+          <button class="seg-btn" data-listener="outside">OUTSIDE</button>
+        </div>
+        <p class="hint" id="listener-hint"></p>
+      </div>
+      <div class="setting-row" id="row-cylinders">
+        <label for="set-cylinders">Cylinders <output id="out-cylinders"></output></label>
+        <input type="range" id="set-cylinders" min="2" max="12" step="1">
+      </div>
+      <div class="setting-row">
+        <label for="set-volume">Volume <output id="out-volume"></output></label>
+        <input type="range" id="set-volume" min="0" max="100" step="1">
+      </div>
+      <div class="setting-row" id="row-startsound">
+        <label for="set-startsound">Start sound</label>
+        <select id="set-startsound">
+          <option value="synth">Synthesized (starter motor model)</option>
+          <option value="sample">Recorded clip</option>
+        </select>
+        <p class="hint">Synthesized: solenoid clack, starter motor whine, the crank
+        dragging through each compression stroke, then misfires as it catches.
+        Shaped per engine (Starter &amp; ignition in the tuner).</p>
+      </div>
+      <div class="setting-row">
+        <label for="set-startvol">Start sound volume <output id="out-startvol"></output></label>
+        <input type="range" id="set-startvol" min="0" max="200" step="5">
+      </div>
+      <div class="setting-row" id="row-tuner">
+        <a class="bar-btn link-btn" href="tuner.html">⚙ PHYSICAL ENGINE TUNER</a>
+      </div>
 
       <h3>Speed source</h3>
       <div class="setting-row">
@@ -177,11 +233,11 @@
         <input type="range" id="set-gears" min="3" max="10" step="1">
       </div>
       <div class="setting-row">
-        <label for="set-shiftup">Shift up at RPM <output id="out-shiftup"></output></label>
+        <label for="set-shiftup">Shift up at <output id="out-shiftup"></output></label>
         <input type="range" id="set-shiftup" min="2000" max="19500" step="100">
       </div>
       <div class="setting-row">
-        <label for="set-shiftdown">Shift down at RPM <output id="out-shiftdown"></output></label>
+        <label for="set-shiftdown">Shift down at <output id="out-shiftdown"></output></label>
         <input type="range" id="set-shiftdown" min="800" max="12000" step="100">
       </div>
       <div class="setting-row">
@@ -191,54 +247,11 @@
 
       <h3>Vehicle</h3>
       <div class="setting-row">
-        <label for="set-maxspeed">Max speed (km/h) <output id="out-maxspeed"></output></label>
+        <label for="set-maxspeed">Max speed <output id="out-maxspeed"></output></label>
         <input type="range" id="set-maxspeed" min="120" max="400" step="10">
       </div>
 
-      <h3>Sound</h3>
-      <div class="setting-row">
-        <label for="set-soundset">Engine</label>
-        <select id="set-soundset">
-          <option value="synth">Synthesized (built-in)</option>
-        </select>
-        <p class="hint" id="soundset-hint">Loading engine library…</p>
-      </div>
-      <div class="setting-row" id="row-cylinders">
-        <label for="set-cylinders">Cylinders <output id="out-cylinders"></output></label>
-        <input type="range" id="set-cylinders" min="2" max="12" step="1">
-      </div>
-      <div class="setting-row" id="row-listener">
-        <label>Listening position</label>
-        <div class="seg" id="listener-seg" role="group" aria-label="Listening position">
-          <button class="seg-btn" data-listener="original">ORIGINAL</button>
-          <button class="seg-btn" data-listener="cabin">INSIDE</button>
-          <button class="seg-btn" data-listener="outside">OUTSIDE</button>
-        </div>
-        <p class="hint" id="listener-hint"></p>
-      </div>
-      <div class="setting-row" id="row-tuner">
-        <a class="bar-btn link-btn" href="tuner.html">⚙ PHYSICAL ENGINE TUNER</a>
-      </div>
-      <div class="setting-row">
-        <label for="set-volume">Volume <output id="out-volume"></output></label>
-        <input type="range" id="set-volume" min="0" max="100" step="1">
-      </div>
-      <div class="setting-row" id="row-startsound">
-        <label for="set-startsound">Start sound</label>
-        <select id="set-startsound">
-          <option value="synth">Synthesized (starter motor model)</option>
-          <option value="sample">Recorded clip</option>
-        </select>
-        <p class="hint">Synthesized: solenoid clack, starter motor whine, the crank
-        dragging through each compression stroke, then misfires as it catches —
-        shaped per engine (Starter &amp; ignition in the tuner).</p>
-      </div>
-      <div class="setting-row">
-        <label for="set-startvol">Start sound volume <output id="out-startvol"></output></label>
-        <input type="range" id="set-startvol" min="0" max="200" step="5">
-      </div>
-
-      <div class="setting-row">
+      <div class="setting-row reset-row">
         <button id="btn-reset-defaults" class="bar-btn danger">RESET TO DEFAULTS</button>
       </div>
 
@@ -250,14 +263,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=34"></script>
-  <script src="js/sound.js?v=34"></script>
-  <script src="js/samples.js?v=34"></script>
-  <script src="js/physical-params.js?v=34"></script>
-  <script src="js/engine-presets.js?v=34"></script>
-  <script src="js/physical.js?v=34"></script>
-  <script src="js/dashboard.js?v=34"></script>
-  <script src="js/main.js?v=34"></script>
+  <script src="js/engine.js?v=35"></script>
+  <script src="js/sound.js?v=35"></script>
+  <script src="js/samples.js?v=35"></script>
+  <script src="js/physical-params.js?v=35"></script>
+  <script src="js/engine-presets.js?v=35"></script>
+  <script src="js/physical.js?v=35"></script>
+  <script src="js/dashboard.js?v=35"></script>
+  <script src="js/main.js?v=35"></script>
 </body>
 
 </html>

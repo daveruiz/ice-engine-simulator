@@ -53,20 +53,36 @@
   function fmtValue(s, v) {
     if (s.type === 'select' || s.type === 'bool') return '';
     const digits = s.step >= 1 ? 0 : (s.step >= 0.05 ? 2 : 3);
-    return Number(v).toFixed(digits) + (s.unit ? ' ' + s.unit : '');
+    const num = Number(v).toLocaleString('en-US',
+      { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return num + (s.unit ? ' ' + s.unit : '');
   }
+
+  /** Fill a range track up to its thumb (CSS reads --p). */
+  function paintRange(input) {
+    const min = Number(input.min) || 0;
+    const max = Number(input.max) || 100;
+    const p = ((Number(input.value) - min) / (max - min)) * 100;
+    input.style.setProperty('--p', Math.max(0, Math.min(100, p)) + '%');
+  }
+  document.addEventListener('input', (e) => {
+    if (e.target.type === 'range') paintRange(e.target);
+  });
 
   function buildParamsUI() {
     const root = $('tuner-params');
     root.innerHTML = '';
     for (const g of PP.GROUPS) {
+      const sec = document.createElement('section');
+      sec.className = 'pgroup';
       const h = document.createElement('h3');
       h.textContent = g.name;
-      root.appendChild(h);
+      sec.appendChild(h);
       for (const s of PP.SCHEMA) {
         if (s.group !== g.id) continue;
-        root.appendChild(buildRow(s));
+        sec.appendChild(buildRow(s));
       }
+      root.appendChild(sec);
     }
   }
 
@@ -128,6 +144,7 @@
       const { input, output, schema } = inputs[key];
       if (schema.type === 'bool') input.checked = !!params[key];
       else input.value = params[key];
+      if (input.type === 'range') paintRange(input);
       output.textContent = fmtValue(schema, params[key]);
     }
   }
@@ -272,10 +289,12 @@
   $('btn-zero').addEventListener('click', () => {
     if (mode === 'rev') {
       $('bench-throttle').value = '0';
+      paintRange($('bench-throttle'));
       $('out-bench-throttle').textContent = '0%';
       throttle = 0;
     } else {
       $('bench-speed').value = '0';
+      paintRange($('bench-speed'));
       $('out-bench-speed').textContent = '0';
       engine.setTargetSpeed(0);
     }
@@ -316,6 +335,8 @@
   }
 
   buildParamsUI();
+  refreshUI();
+  document.querySelectorAll('#bench input[type="range"]').forEach(paintRange);
   syncBenchToSettings();
   requestAnimationFrame(loop);
 

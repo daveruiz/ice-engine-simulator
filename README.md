@@ -183,8 +183,14 @@ user gesture before audio can play).
     Settings, loops are made seamless and volume-normalized at load time.
     [`dev/`](dev/README.md) has headless-browser scripts for measuring a
     recording's RPM and cutting clean loop points when preparing a pack.
-- **UI** (`js/dashboard.js`): canvas tachometer with red zone, speedometer,
-  gear indicator and shift light, styled like an instrument cluster.
+- **UI** (`js/dashboard.js`, `css/style.css`): an instrument cluster —
+  canvas tachometer and speedometer (260° dials with red zone, glowing value
+  arc, digital LCD window), a center stack with racing-style shift lights
+  (green → amber → red, flashing at the shift point / limiter), the gear and
+  an engine load meter. Portrait phones put the tachometer large on top;
+  landscape and the car screen show the dials side by side, sized to the
+  available height. One button/control family, self-hosted Barlow typefaces
+  ([`fonts/`](fonts/)), and the engine picker at the top of the screen.
 
 ## Configurable (⚙ Settings)
 
@@ -245,6 +251,10 @@ Free to use, share and modify under the **GNU General Public License v3.0**
 (or later) — see [LICENSE](LICENSE). GPL is copyleft: you may redistribute and
 adapt it freely, but derived works must keep this license and its copyright
 attribution, and share their source under the same terms.
+
+The bundled Barlow and Barlow Condensed fonts (Copyright 2017 The Barlow
+Project Authors) are under the SIL Open Font License 1.1 — see
+[fonts/OFL.txt](fonts/OFL.txt).
 
 Special thanks to Baldan, Lachambre, Delle Monache & Boussard, whose paper
 [_"Physically informed car engine sound synthesis for virtual and augmented

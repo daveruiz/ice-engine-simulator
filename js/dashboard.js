@@ -1,21 +1,27 @@
 /**
  * Gauge — canvas analog dial (tachometer / speedometer) in the style of
- * a car instrument cluster: 240° sweep, tick marks, red zone, glowing
- * needle, digital value in the hub.
+ * a car instrument cluster: 260° sweep, tick marks, red zone, a glowing
+ * value arc on the rim, needle, and the digital value in an LCD window
+ * under the hub with the unit below it.
  */
+const GAUGE_FONT = '"Barlow Condensed", "Arial Narrow", system-ui, sans-serif';
+
 class Gauge {
   /**
    * @param {HTMLCanvasElement} canvas
-   * @param {object} opts { max, majorStep, redFrom, label, digitalFmt }
+   * @param {object} opts { max, majorStep, redFrom, minorPerMajor,
+   *   tickLabel, digitalFmt, unit, arcColor }
    */
   constructor(canvas, opts) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.opts = opts;
+    this.opts = Object.assign({ arcColor: '#ff5a1f', unit: '' }, opts);
     this.value = 0;
     this.displayValue = 0;
-    this.startAngle = (3 * Math.PI) / 4;                 // 135°
-    this.endAngle = this.startAngle + (3 * Math.PI) / 2; // 270° sweep (135°→405°)
+    // 260° sweep, symmetric about the top: leaves a clear gap at the
+    // bottom for the LCD window so it never crowds the end numerals.
+    this.startAngle = (140 * Math.PI) / 180;
+    this.endAngle = (400 * Math.PI) / 180;
     this._resize();
   }
 
@@ -23,6 +29,10 @@ class Gauge {
     this.opts.max = max;
     this.opts.majorStep = majorStep;
     this.opts.redFrom = redFrom;
+  }
+
+  setUnit(unit) {
+    this.opts.unit = unit;
   }
 
   _resize() {
@@ -40,6 +50,17 @@ class Gauge {
     return this.startAngle + frac * (this.endAngle - this.startAngle);
   }
 
+  _roundRect(x, y, w, h, rad) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+
   draw() {
     const { ctx, size, opts } = this;
     const c = size / 2;
@@ -48,63 +69,89 @@ class Gauge {
 
     // Needle inertia for a mechanical feel
     this.displayValue += (this.value - this.displayValue) * 0.25;
+    const vAngle = this._angleFor(this.displayValue);
 
-    // Face
-    const face = ctx.createRadialGradient(c, c, r * 0.1, c, c, r);
-    face.addColorStop(0, '#161b26');
-    face.addColorStop(1, '#0a0d13');
+    // Face + bezel
+    const face = ctx.createRadialGradient(c, c * 0.8, r * 0.1, c, c, r);
+    face.addColorStop(0, '#171d29');
+    face.addColorStop(1, '#090c11');
     ctx.beginPath();
     ctx.arc(c, c, r, 0, Math.PI * 2);
     ctx.fillStyle = face;
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#2a3245';
+    const bezel = ctx.createLinearGradient(0, c - r, 0, c + r);
+    bezel.addColorStop(0, '#3d4862');
+    bezel.addColorStop(1, '#1a2030');
+    ctx.lineWidth = Math.max(1.5, size * 0.008);
+    ctx.strokeStyle = bezel;
     ctx.stroke();
 
-    // Red zone arc
+    // Value arc on the rim (track + lit part with glow)
+    const rArc = r * 0.95;
+    const wArc = Math.max(2, size * 0.014);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(c, c, rArc, this.startAngle, this.endAngle);
+    ctx.lineWidth = wArc;
+    ctx.strokeStyle = '#161c28';
+    ctx.stroke();
+    if (vAngle > this.startAngle + 0.005) {
+      ctx.save();
+      ctx.shadowColor = opts.arcColor;
+      ctx.shadowBlur = size * 0.03;
+      ctx.beginPath();
+      ctx.arc(c, c, rArc, this.startAngle, vAngle);
+      ctx.strokeStyle = this.displayValue >= opts.redFrom ? '#ff2d3a' : opts.arcColor;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.lineCap = 'butt';
+
+    // Red zone
     if (opts.redFrom < opts.max) {
       ctx.beginPath();
-      ctx.arc(c, c, r * 0.86, this._angleFor(opts.redFrom), this.endAngle);
-      ctx.lineWidth = size * 0.035;
+      ctx.arc(c, c, r * 0.85, this._angleFor(opts.redFrom), this.endAngle);
+      ctx.lineWidth = size * 0.03;
       ctx.strokeStyle = 'rgba(255,45,58,0.85)';
       ctx.stroke();
     }
 
     // Ticks + numerals
     const minorStep = opts.majorStep / (opts.minorPerMajor || 4);
+    const numSize = Math.round(size * 0.08);
+    ctx.font = `600 ${numSize}px ${GAUGE_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     for (let v = 0; v <= opts.max + 1e-6; v += minorStep) {
       const major = Math.abs(v % opts.majorStep) < minorStep / 2 ||
                     Math.abs((v % opts.majorStep) - opts.majorStep) < minorStep / 2;
       const a = this._angleFor(v);
+      const red = v >= opts.redFrom;
       const rOut = r * 0.88;
       const rIn = r * (major ? 0.76 : 0.82);
       ctx.beginPath();
       ctx.moveTo(c + Math.cos(a) * rIn, c + Math.sin(a) * rIn);
       ctx.lineTo(c + Math.cos(a) * rOut, c + Math.sin(a) * rOut);
-      ctx.lineWidth = major ? 3 : 1.5;
-      ctx.strokeStyle = v >= opts.redFrom ? '#ff2d3a' : '#c7d0e0';
+      ctx.lineWidth = major ? Math.max(2, size * 0.012) : Math.max(1, size * 0.005);
+      ctx.strokeStyle = red ? '#ff2d3a' : (major ? '#dfe5ef' : '#7d8699');
       ctx.stroke();
 
       if (major) {
-        const rt = r * 0.63;
-        ctx.fillStyle = v >= opts.redFrom ? '#ff6a73' : '#8a93a6';
-        ctx.font = `600 ${Math.round(size * 0.075)}px system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        const rt = r * 0.64;
+        ctx.fillStyle = red ? '#ff6a73' : '#aab3c5';
         ctx.fillText(String(opts.tickLabel ? opts.tickLabel(v) : Math.round(v)),
           c + Math.cos(a) * rt, c + Math.sin(a) * rt);
       }
     }
 
-    // Needle
-    const a = this._angleFor(this.displayValue);
+    // Needle (with a short counterweight tail)
     ctx.save();
     ctx.translate(c, c);
-    ctx.rotate(a);
+    ctx.rotate(vAngle);
     ctx.shadowColor = 'rgba(255,90,31,0.8)';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = size * 0.035;
     ctx.beginPath();
-    ctx.moveTo(-r * 0.12, 0);
+    ctx.moveTo(-r * 0.14, 0);
     ctx.lineTo(r * 0.84, 0);
     ctx.lineWidth = Math.max(2.5, size * 0.014);
     ctx.lineCap = 'round';
@@ -114,20 +161,37 @@ class Gauge {
 
     // Hub
     ctx.beginPath();
-    ctx.arc(c, c, r * 0.09, 0, Math.PI * 2);
+    ctx.arc(c, c, r * 0.085, 0, Math.PI * 2);
     ctx.fillStyle = '#1d2434';
     ctx.fill();
-    ctx.strokeStyle = '#3a4356';
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#3d4862';
     ctx.stroke();
 
-    // Digital value under the hub
+    // LCD window with the digital value
+    const ww = r * 0.6, wh = r * 0.27, wy = c + r * 0.31;
+    this._roundRect(c - ww / 2, wy, ww, wh, r * 0.06);
+    ctx.fillStyle = '#06080c';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#2a3245';
+    ctx.stroke();
     ctx.fillStyle = '#e8edf5';
-    ctx.font = `700 ${Math.round(size * 0.11)}px system-ui, sans-serif`;
+    ctx.font = `700 ${Math.round(size * 0.115)}px ${GAUGE_FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const text = opts.digitalFmt ? opts.digitalFmt(this.displayValue)
                                  : String(Math.round(this.displayValue));
-    ctx.fillText(text, c, c + r * 0.38);
+    ctx.fillText(text, c, wy + wh * 0.54);
+
+    // Unit
+    if (opts.unit) {
+      ctx.fillStyle = '#8a93a6';
+      ctx.font = `600 ${Math.round(size * 0.048)}px ${GAUGE_FONT}`;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = `${(size * 0.008).toFixed(1)}px`;
+      ctx.fillText(opts.unit, c, wy + wh + r * 0.13);
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    }
   }
 }
 
