@@ -178,8 +178,11 @@ user gesture before audio can play).
     panels re-radiate, strong on a 3-cylinder or a diesel, faint on a
     V12 — a dull intake roar through the firewall, and almost none of
     the engine-bay mechanics: valvetrain clatter, piston slap and chain
-    rattle stay under the bonnet; plus the bodywork lowpass, cabin bass
-    boom and a small damped room) and _Outside_ (a few metres away:
+    rattle stay under the bonnet. Treble is filtered **per source**, by
+    each one's path to the seat — exhaust through floor and rear glass,
+    intake and mechanics through the firewall, while the turbo whistle and
+    the bang keep their edge — rather than with a global lowpass; plus a
+    gentle cabin bass boom and a small damped room) and _Outside_ (a few metres away:
     tailpipe-dominated, brighter bark, ground and street reflections).
     Positions are relative modifiers layered automatically on top of
     whatever engine is active (preset or hand-tuned) — `{mul, add}` on

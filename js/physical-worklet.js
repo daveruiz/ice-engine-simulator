@@ -51,6 +51,12 @@
  *   `vibGain` is how much reaches the listener (0 outside, set by the
  *   cabin listening position).
  *
+ *   Transmission path: each source reaches the listener through its own
+ *   one-pole lowpass (exhaustTone, intakeTone, mechTone, turboTone,
+ *   starterTone, bangTone; ≥18 kHz = open). The listening positions set
+ *   them, so e.g. inside the car the engine-bay clatter loses its highs
+ *   through the firewall while the turbo whistle and the bang keep theirs.
+ *
  *   Output 1 is the overrun bang layer: when unburnt mixture ignites it
  *   cracks at the tailpipe (unmuffled), with optional after-crackle. It's
  *   kept separate so the host can saturate it hard and mix it past the
@@ -246,6 +252,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.samplesSincePop = 1e9;
     this.mLp = 0; this.dcX = 0; this.dcY = 0;
     this.vib1 = 0; this.vib2 = 0; this.vibHp = 0;
+    // per-source transmission-path lowpass states
+    this.tEx = 0; this.tIn = 0; this.tMe = 0; this.tTu = 0; this.tSt = 0; this.tBa = 0;
 
     this._applyParams();
 
@@ -335,6 +343,13 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.kCool = tauCoef(5.0, sr);   // …and cools down slower
     this.bangPipe.set(D(0.32), 0.45, lpCoef(5000, sr));
     this.bangCrackK = lpCoef(1400, sr);
+    const tone = (hz) => (!hz || hz >= 18000 ? 1 : lpCoef(hz, sr));
+    this.kTEx = tone(P.exhaustTone);
+    this.kTIn = tone(P.intakeTone);
+    this.kTMe = tone(P.mechTone);
+    this.kTTu = tone(P.turboTone);
+    this.kTSt = tone(P.starterTone);
+    this.kTBa = tone(P.bangTone);
     this.vibK = lpCoef(110, sr);   // mounts pass the low orders only
     this.vibHpK = lpCoef(18, sr);  // (remove the pulse train's DC)
     this.kComb = tauCoef(0.04, sr);
@@ -600,7 +615,15 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         vib = (this.vib2 - this.vibHp) * vg * 1.6;
       }
 
-      let sum = exhaust + intake + mech + chain + turbo + starter + vib;
+      // ---- transmission path: per-source lowpass to the listener ----
+      let exT = exhaust, inT = intake, meT = mech + chain, tuT = turbo, stT = starter;
+      if (this.kTEx < 1) exT = (this.tEx += (exhaust - this.tEx) * this.kTEx);
+      if (this.kTIn < 1) inT = (this.tIn += (intake - this.tIn) * this.kTIn);
+      if (this.kTMe < 1) meT = (this.tMe += (mech + chain - this.tMe) * this.kTMe);
+      if (this.kTTu < 1) tuT = (this.tTu += (turbo - this.tTu) * this.kTTu);
+      if (this.kTSt < 1) stT = (this.tSt += (starter - this.tSt) * this.kTSt);
+
+      let sum = exT + inT + meT + tuT + stT + vib;
       sum = Math.tanh(sum * P.drive) * this.driveNorm;
       this.mLp += (sum - this.mLp) * this.masterK;
       const y = this.mLp - this.dcX + 0.995 * this.dcY;
@@ -630,6 +653,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           bang = this.bangPipe.tick((crack * 0.9 + body) * this.bangEnv);
           this.bangEnv *= this.bangDecay;
         }
+        if (this.kTBa < 1) bang = (this.tBa += (bang - this.tBa) * this.kTBa);
         bangOut[i] = bang * (P.bangLevel || 0) * 0.8;
       }
     }

@@ -22,6 +22,7 @@ window.PhysicalParams = (function () {
     { id: 'turbo',   name: 'Turbocharger' },
     { id: 'pops',    name: 'Overrun pops' },
     { id: 'starter', name: 'Starter & ignition' },
+    { id: 'path',    name: 'Transmission path (per source)' },
     { id: 'out',     name: 'Output' },
     { id: 'fx',      name: 'FX bus (EQ & saturation)' },
   ];
@@ -184,6 +185,27 @@ window.PhysicalParams = (function () {
       min: 0, max: 1, step: 0.01, def: 0.45,
       info: 'Chance of smaller crackles following a bang (the burble of a sports exhaust).' },
 
+    // ---- Transmission path: per-source lowpass to the listener ----
+    // Open (20 kHz) by default; the listening positions set them.
+    { key: 'exhaustTone', group: 'path', label: 'Exhaust brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on the exhaust on its way to the listener (body, floor, rear glass). 20 kHz = open.' },
+    { key: 'intakeTone', group: 'path', label: 'Intake brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on the intake noise on its way to the listener (firewall).' },
+    { key: 'mechTone', group: 'path', label: 'Mechanical brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on block resonances, valvetrain clatter and chain rattle on their way to the listener (bonnet, firewall).' },
+    { key: 'turboTone', group: 'path', label: 'Turbo brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on the turbo whistle, hiss and blow-off on their way to the listener.' },
+    { key: 'starterTone', group: 'path', label: 'Starter brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on the starter motor and solenoid on their way to the listener.' },
+    { key: 'bangTone', group: 'path', label: 'Bang brightness', unit: 'Hz',
+      min: 300, max: 20000, step: 50, def: 20000,
+      info: 'Lowpass on the tailpipe bangs on their way to the listener.' },
+
     // ---- Output ----
     { key: 'drive', group: 'out', label: 'Drive / saturation',
       min: 0.3, max: 6, step: 0.05, def: 1.6,
@@ -276,42 +298,49 @@ window.PhysicalParams = (function () {
         'and the engine’s vibration through the body (a low rumble at the ' +
         'firing rate); the intake comes through the firewall as a dull roar. ' +
         'Mechanical clatter, chain rattle and hiss stay under the bonnet.',
+      // Each source gets its own transmission path (level + lowpass): the
+      // highs aren't cut globally, so what really leaks through (turbo
+      // whistle, the bang, some exhaust rasp) keeps its edge.
       mods: {
-        // Airborne through the body: exhaust (muffled, from behind)
+        // Exhaust: from behind, through floor / rear glass — loses some top
         exhaustGain: { mul: 0.9 },
-        straightMix: { mul: 0.5 },
-        mufflerCutoff: { mul: 0.8 },
-        fireNoise: { mul: 0.6 },        // the bang arrives, not its crackly texture
-        // Intake through the firewall: a roar under load, not a hiss
+        straightMix: { mul: 0.85 },     // keep the tailpipe rasp
+        exhaustTone: { set: 4500 },
+        fireNoise: { mul: 0.8 },
+        // Intake through the firewall: a roar under load more than a hiss
         intakeGain: { mul: 0.7 },
-        intakeColor: { mul: 0.45 },
-        // Engine bay mechanics: bonnet + firewall insulation block them
+        intakeColor: { mul: 0.65 },
+        intakeTone: { set: 2200 },
+        // Engine bay mechanics: bonnet + firewall block them (dull, quiet)
         mechGain: { mul: 0.3 },
         res2Gain: { mul: 0.35 },        // valvetrain clatter goes first
         chainGain: { mul: 0.05 },
-        // Turbo: faint whistle, blow-off audible but dull
-        whineGain: { mul: 0.45 },
-        hissGain: { mul: 0.25 },
-        blowoffGain: { mul: 0.5 },
+        mechTone: { set: 1400 },
+        // Turbo: the whistle carries into the cabin; hiss mostly doesn't
+        whineGain: { mul: 0.5 },
+        hissGain: { mul: 0.3 },
+        blowoffGain: { mul: 0.55 },
+        turboTone: { set: 8000 },
+        // Bangs: dulled a little, but still a sharp crack
         popGain: { mul: 0.85 },
-        bangLevel: { mul: 0.6 },
+        bangLevel: { mul: 0.65 },
+        bangTone: { set: 5500 },
         starterGain: { mul: 0.7 },
         solenoidGain: { mul: 0.45 },
+        starterTone: { set: 3500 },
         // Structure-borne: the shake comes through seat, floor and panels
         vibGain: { add: 0.7 },
-        // Tone: bodywork transmission loss (highs) + cabin bass build-up
-        masterLp: { mul: 0.5 },
+        // Overall: just a gentle tilt + cabin bass build-up
         bassFreq: { mul: 0.9 },
-        bassGain: { add: 3 },
-        midGain: { add: -1.5 },
-        trebleGain: { add: -6 },
-        satMix: { mul: 0.85 },
+        bassGain: { add: 1.5 },         // the vibration already carries the lows
+        midGain: { add: -1 },
+        trebleGain: { add: -1 },
         masterGain: { mul: 0.9 },
       },
       space: {
         gain: 0.78,                      // post-compressor level (cabin bass boost)
-        lowpass: 2600, lowpassQ: 0.8,   // panels/glass: steep high-frequency loss
-        boomFreq: 68, boomGain: 5, boomQ: 1.1, // first cabin mode
+        lowpass: 11000, lowpassQ: 0.5,  // only the very top is lost globally
+        boomFreq: 68, boomGain: 3.5, boomQ: 1.1, // first cabin mode
         mix: 0.22,                       // small, damped room
         ir: { decay: 0.14, predelay: 0.002, tone: 1800, width: 0.35,
           early: [[0.0035, 0.5], [0.0062, 0.35], [0.0091, 0.25]] },
