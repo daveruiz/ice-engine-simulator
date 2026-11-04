@@ -172,12 +172,18 @@ user gesture before audio can play).
     values are tuned by ear to evoke each engine. Tweaking anything
     afterwards marks the preset as modified, with a one-tap ↺ restore.
   - **Listening position** (⚙ Settings → Sound; defaults to _Inside_):
-    _Original_ (the raw model, next to the engine), _Inside_
-    (driver's seat: bodywork lowpass, cabin bass boom, firewall intake
-    noise, muffled tailpipe, a small damped room) and _Outside_ (a few
-    metres away: tailpipe-dominated, brighter bark, ground and street
-    reflections). Positions are relative modifiers layered automatically
-    on top of whatever engine is active (preset or hand-tuned), plus an
+    _Original_ (the raw model, next to the engine), _Inside_ (driver's
+    seat: the muffled exhaust from behind plus the engine's
+    **structure-borne vibration** — the firing-rate rumble the body
+    panels re-radiate, strong on a 3-cylinder or a diesel, faint on a
+    V12 — a dull intake roar through the firewall, and almost none of
+    the engine-bay mechanics: valvetrain clatter, piston slap and chain
+    rattle stay under the bonnet; plus the bodywork lowpass, cabin bass
+    boom and a small damped room) and _Outside_ (a few metres away:
+    tailpipe-dominated, brighter bark, ground and street reflections).
+    Positions are relative modifiers layered automatically on top of
+    whatever engine is active (preset or hand-tuned) — `{mul, add}` on
+    any numeric parameter or `{set}` on any other — plus an
     acoustic-space stage (lowpass, boom resonance, generated impulse
     response) after the FX bus — see `LISTENERS` in
     [`js/physical-params.js`](js/physical-params.js).

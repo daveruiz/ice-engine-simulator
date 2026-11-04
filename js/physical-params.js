@@ -132,6 +132,12 @@ window.PhysicalParams = (function () {
       info: 'Second, brighter resonance (valvetrain clatter).' },
     { key: 'res2Gain', group: 'mech', label: 'Resonance 2 level',
       min: 0, max: 1.5, step: 0.01, def: 0.25 },
+    { key: 'vibration', group: 'mech', label: 'Engine vibration',
+      min: 0, max: 2, step: 0.01, def: 1.0,
+      info: 'How much this engine shakes on its mounts (cylinder layout, mount stiffness): high for 3-cylinders and diesels, low for a V12. Felt as a low rumble wherever the listener picks up structure-borne sound.' },
+    { key: 'vibGain', group: 'mech', label: 'Structure-borne level',
+      min: 0, max: 1.5, step: 0.01, def: 0,
+      info: 'How much of the engine vibration reaches the listener through the body. 0 next to or outside the car; the Inside listening position raises it.' },
     { key: 'chainGain', group: 'mech', label: 'Chain / accessory rattle',
       min: 0, max: 1, step: 0.01, def: 0.15,
       info: 'Timing chain & accessory drive rattle — random high ticks at camshaft speed, loudest off-load.' },
@@ -247,9 +253,10 @@ window.PhysicalParams = (function () {
    * whatever engine parameters are active (a preset or a tuned set), so
    * the same position works for every engine automatically:
    *
-   *   mods  — per-parameter { mul, add } applied to the engine params
-   *           (which sources reach the ear, how bright, how much bass);
-   *           results are clamped to the schema range.
+   *   mods  — per-parameter { mul, add } or { set } applied to the engine
+   *           params (any schema key: which sources reach the ear, how
+   *           bright, how much bass, even selects/switches via `set`);
+   *           numeric results are clamped to the schema range.
    *   space — the acoustic path after synthesis (native WebAudio nodes in
    *           physical.js): a transmission lowpass, a low "boom"
    *           resonance and a generated room/street impulse response.
@@ -265,28 +272,37 @@ window.PhysicalParams = (function () {
     },
     {
       id: 'cabin', name: 'Inside the car', short: 'CABIN',
-      desc: 'Driver’s seat: the body filters out the highs, the cabin booms ' +
-        'with the firing rumble, intake noise comes through the firewall and ' +
-        'the exhaust arrives muffled from behind.',
+      desc: 'Driver’s seat: you mostly get the exhaust, muffled from behind, ' +
+        'and the engine’s vibration through the body (a low rumble at the ' +
+        'firing rate); the intake comes through the firewall as a dull roar. ' +
+        'Mechanical clatter, chain rattle and hiss stay under the bonnet.',
       mods: {
-        // Sources: intake/firewall dominate, tailpipe and hiss are muffled
-        intakeGain: { mul: 1.25 },
+        // Airborne through the body: exhaust (muffled, from behind)
+        exhaustGain: { mul: 0.9 },
         straightMix: { mul: 0.5 },
         mufflerCutoff: { mul: 0.8 },
-        mechGain: { mul: 0.7 },
-        res2Gain: { mul: 0.5 },
-        chainGain: { mul: 0.35 },
-        whineGain: { mul: 0.75 },
-        hissGain: { mul: 0.4 },
-        blowoffGain: { mul: 0.6 },
+        fireNoise: { mul: 0.6 },        // the bang arrives, not its crackly texture
+        // Intake through the firewall: a roar under load, not a hiss
+        intakeGain: { mul: 0.7 },
+        intakeColor: { mul: 0.45 },
+        // Engine bay mechanics: bonnet + firewall insulation block them
+        mechGain: { mul: 0.3 },
+        res2Gain: { mul: 0.35 },        // valvetrain clatter goes first
+        chainGain: { mul: 0.05 },
+        // Turbo: faint whistle, blow-off audible but dull
+        whineGain: { mul: 0.45 },
+        hissGain: { mul: 0.25 },
+        blowoffGain: { mul: 0.5 },
         popGain: { mul: 0.85 },
         bangLevel: { mul: 0.6 },
-        starterGain: { mul: 0.8 },
-        solenoidGain: { mul: 0.7 },
+        starterGain: { mul: 0.7 },
+        solenoidGain: { mul: 0.45 },
+        // Structure-borne: the shake comes through seat, floor and panels
+        vibGain: { add: 0.7 },
         // Tone: bodywork transmission loss (highs) + cabin bass build-up
         masterLp: { mul: 0.5 },
         bassFreq: { mul: 0.9 },
-        bassGain: { add: 4 },
+        bassGain: { add: 3 },
         midGain: { add: -1.5 },
         trebleGain: { add: -6 },
         satMix: { mul: 0.85 },
@@ -295,7 +311,7 @@ window.PhysicalParams = (function () {
       space: {
         gain: 0.78,                      // post-compressor level (cabin bass boost)
         lowpass: 2600, lowpassQ: 0.8,   // panels/glass: steep high-frequency loss
-        boomFreq: 68, boomGain: 6, boomQ: 1.1, // first cabin mode
+        boomFreq: 68, boomGain: 5, boomQ: 1.1, // first cabin mode
         mix: 0.22,                       // small, damped room
         ir: { decay: 0.14, predelay: 0.002, tone: 1800, width: 0.35,
           early: [[0.0035, 0.5], [0.0062, 0.35], [0.0091, 0.25]] },
@@ -344,8 +360,10 @@ window.PhysicalParams = (function () {
     const out = Object.assign({}, params);
     for (const key of Object.keys(L.mods)) {
       const s = SCHEMA.find((x) => x.key === key);
-      if (!s || typeof out[key] !== 'number') continue;
       const m = L.mods[key];
+      if (!s) continue;
+      if (m.set !== undefined) { out[key] = m.set; continue; }
+      if (typeof out[key] !== 'number') continue;
       let v = out[key] * (m.mul !== undefined ? m.mul : 1) + (m.add || 0);
       if (s.min !== undefined) v = Math.max(s.min, v);
       if (s.max !== undefined) v = Math.min(s.max, v);
