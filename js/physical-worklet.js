@@ -35,6 +35,20 @@
  *
  *   mix ──> tanh soft clip (drive) ──> master lowpass ──> DC blocker
  *
+ *   Realism (no two cycles alike): each cylinder has a fixed strength /
+ *   timing offset (cylImbalance → the half orders a real engine has), every
+ *   combustion is jittered in timing and duration (phaseJitter), and the
+ *   exhaust waveguides are fractional delays re-tuned by the exhaust gas
+ *   temperature (hotter gas → faster sound → resonances rise with load,
+ *   with thermal lag) plus a little flow turbulence. Without these, a
+ *   perfectly periodic pulse train through static comb resonances gives
+ *   pure, glassy partials that "bead" as they sweep through the combs.
+ *
+ *   Output 1 is the overrun bang layer: when unburnt mixture ignites it
+ *   cracks at the tailpipe (unmuffled), with optional after-crackle. It's
+ *   kept separate so the host can saturate it hard and mix it past the
+ *   bus compressor (see physical.js).
+ *
  * A digital waveguide is a delay line with a filtered, sign-inverting
  * reflection: the pressure wave travels down the pipe, loses highs to the
  * walls (one-pole LP) and partially reflects at the open end with phase
@@ -66,7 +80,12 @@ function tauCoef(tau, sr) {
  * arriving at the open end (what radiates out).
  */
 class Pipe {
-  constructor(size) {
+  /**
+   * steep: reflection loss is two-pole — the open tail radiates the highs
+   * away instead of reflecting them, so resonances stay strong in the bass
+   * (drone) but the comb fades out higher up (no "phaser" beading).
+   */
+  constructor(size, steep = false) {
     this.buf = new Float32Array(size);
     this.size = size;
     this.w = 0;
@@ -74,20 +93,45 @@ class Pipe {
     this.fb = 0.5;
     this.k = 0.3;
     this.lp = 0;
+    this.lp2 = 0;
+    this.steep = steep;
   }
   set(D, fb, k) {
-    this.D = Math.max(2, Math.min(this.size - 1, Math.round(D)));
+    this.D = Math.max(2, Math.min(this.size - 3, D));
     this.fb = fb;
     this.k = k;
   }
-  tick(x) {
-    let r = this.w - this.D;
+  /** `scale` stretches the delay (gas temperature / turbulence), ≈1. */
+  tick(x, scale = 1) {
+    let d = this.D * scale;
+    if (d > this.size - 3) d = this.size - 3; else if (d < 2) d = 2;
+    let r = this.w - d;
     if (r < 0) r += this.size;
-    const y = this.buf[r];
+    const i0 = r | 0;
+    const i1 = i0 + 1 === this.size ? 0 : i0 + 1;
+    const y = this.buf[i0] + (this.buf[i1] - this.buf[i0]) * (r - i0);
     this.lp += (y - this.lp) * this.k;
-    this.buf[this.w] = x - this.fb * this.lp;
+    let refl = this.lp;
+    if (this.steep) { this.lp2 += (this.lp - this.lp2) * this.k; refl = this.lp2; }
+    this.buf[this.w] = x - this.fb * refl;
     if (++this.w === this.size) this.w = 0;
     return y;
+  }
+}
+
+/** Smooth random signal in [-1, 1]: new target every `period` samples. */
+class SmoothNoise {
+  constructor(period, sr) {
+    this.period = Math.max(1, Math.round(period));
+    this.n = 0;
+    this.v = 0;
+    this.t = 0;
+    this.k = 1 - Math.exp(-3 / this.period);
+  }
+  tick() {
+    if (--this.n <= 0) { this.n = this.period; this.t = Math.random() * 2 - 1; }
+    this.v += (this.t - this.v) * this.k;
+    return this.v;
   }
 }
 
@@ -137,6 +181,32 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.cycleAmp = new Float32Array(MAX_CYL).fill(1);
     this.cyclePop = new Uint8Array(MAX_CYL);
     this.cycleFire = new Uint8Array(MAX_CYL).fill(1);
+    this.cycleOff = new Float32Array(MAX_CYL);   // combustion delay (cycles)
+    this.cycleW = new Float32Array(MAX_CYL).fill(0.045); // pulse width
+    // Fixed per-cylinder character (this engine, this start): strength and
+    // combustion-phasing spread — scaled live by the cylImbalance param.
+    this.cylBias = new Float32Array(MAX_CYL);
+    this.cylLag = new Float32Array(MAX_CYL);
+    for (let c = 0; c < MAX_CYL; c++) {
+      this.cylBias[c] = Math.random() * 2 - 1;
+      this.cylLag[c] = Math.random();
+    }
+
+    // Exhaust gas temperature (0..1) and flow turbulence for the pipes
+    this.gasT = 0.35;
+    this.turbL = new SmoothNoise(sampleRate / 3.1, sampleRate);
+    this.turbR = new SmoothNoise(sampleRate / 2.7, sampleRate);
+    this.turbX = new SmoothNoise(sampleRate / 1.9, sampleRate);
+    this.turbI = new SmoothNoise(sampleRate / 4.3, sampleRate);
+    // Turbo blade-pass wander (frequency / amplitude flutter)
+    this.whFm = new SmoothNoise(sampleRate / 9, sampleRate);
+    this.whAm = new SmoothNoise(sampleRate / 6, sampleRate);
+
+    // Overrun bang layer (output 1)
+    this.bangQ = [];            // pending [samplesLeft, strength]
+    this.bangEnv = 0; this.bangDecay = 0.999; this.bangLp = 0;
+    this.bangPipe = new Pipe(2048);
+    this.bpBangLo = new Bandpass();
 
     // Ignition / starter state
     this.combT = 1; this.comb = 1;  // combustion (1 = running normally)
@@ -154,7 +224,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     // Waveguides (sized for ≤6 m pipe / ≤3.75 m runner at 96 kHz)
     this.runL = new Pipe(4096);
     this.runR = new Pipe(4096);
-    this.exPipe = new Pipe(4096);
+    this.exPipe = new Pipe(4096, true);
     this.inPipe = new Pipe(2048);
 
     // Filter/envelope state
@@ -224,7 +294,10 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     // out of step — the boxer rumble)
     const imb = P.runnerImbalance !== undefined ? P.runnerImbalance : 1.07;
     this.runR.set(D(P.runnerLength * imb), P.runnerFb, lpCoef(3200, sr));
-    this.exPipe.set(D(P.exhaustLength), P.exhaustFb, lpCoef(P.exhaustLp, sr));
+    // The muffler sits inside the pipe's round trip, so its absorption also
+    // damps the pipe resonance (a straight pipe keeps the full reflection)
+    const mufflerDamp = P.straightMix + (1 - P.straightMix) * 0.6;
+    this.exPipe.set(D(P.exhaustLength), P.exhaustFb * mufflerDamp, lpCoef(P.exhaustLp, sr));
     this.inPipe.set(D(P.intakeLength), P.intakeFb, lpCoef(2500, sr));
 
     this.muffK = lpCoef(P.mufflerCutoff, sr);
@@ -250,6 +323,10 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.driveNorm = 1 / Math.tanh(Math.max(0.3, P.drive));
 
     // Starter & ignition
+    this.kHeat = tauCoef(1.8, sr);   // exhaust gas heats up…
+    this.kCool = tauCoef(5.0, sr);   // …and cools down slower
+    this.bangPipe.set(D(0.32), 0.45, lpCoef(5000, sr));
+    this.bangCrackK = lpCoef(1400, sr);
     this.kComb = tauCoef(0.04, sr);
     this.kStLock = tauCoef(0.004, sr);         // pinion locked to the ring gear
     this.stSpinDown = Math.exp(-1 / (0.45 * sr)); // free armature spin-down
@@ -262,6 +339,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
 
   process(inputs, outputs) {
     const out = outputs[0][0];
+    const bangOut = outputs[1] ? outputs[1][0] : null;
     const P = this.P, sr = this.sr, N = this.N;
     const w = P.fireWidth, wIn = 0.28;
     const TWO_PI = 2 * Math.PI;
@@ -301,8 +379,21 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         this.wobbleT = (Math.random() * 2 - 1) * depth;
       }
 
+      // ---- exhaust gas temperature → pipe tuning (+ flow turbulence) ----
+      const heat = this.comb * (0.15 + 0.5 * load + 0.35 * rpmNorm);
+      this.gasT += (heat - this.gasT) * (heat > this.gasT ? this.kHeat : this.kCool);
+      const thermal = 1 / (1 + (P.gasTemp || 0) * (this.gasT - 0.45) * 2);
+      const turb = (P.turbulence || 0) * (0.3 + 0.7 * load);
+      const sL = thermal * (1 + turb * this.turbL.tick());
+      const sR = thermal * (1 + turb * this.turbR.tick());
+      const sX = thermal * (1 + turb * this.turbX.tick());
+      const sI = 1 + turb * 0.5 * this.turbI.tick();
+
       // ---- cylinders: combustion pulses, intake gates, impacts ----
       const overrun = load < 0.12 && rpmNorm > 0.28;
+      const imb = P.cylImbalance || 0;
+      const jit = (P.phaseJitter || 0) / 720;             // degrees → cycles
+      const wJit = Math.min(0.4, 0.1 * (P.phaseJitter || 0));
       this.samplesSincePop++;
       let exL = 0, exR = 0, gate = 0;
       for (let c = 0; c < N; c++) {
@@ -311,7 +402,12 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         if (x < dp) {
           // New cycle for this cylinder: combustion strength varies
           // shot-to-shot (mixture/ignition dispersion, strongest at idle)
-          this.cycleAmp[c] = 1 + P.variability * (Math.random() * 4 - 2);
+          this.cycleAmp[c] = (1 + P.variability * (Math.random() * 4 - 2)) *
+            (1 + imb * this.cylBias[c]);
+          // Combustion phasing: this cylinder's own lag + cycle jitter, and
+          // a burn that's a little quicker or slower every time
+          this.cycleOff[c] = imb * 0.05 * this.cylLag[c] + Math.random() * jit;
+          this.cycleW[c] = w * (1 + wJit * (Math.random() * 2 - 1));
           // Ignition: does this cylinder fire this cycle? (always, once
           // running; sometimes while the engine is catching; never while
           // cranking or after key-off)
@@ -323,14 +419,28 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
               Math.random() < P.popChance) {
             pop = 1;
             this.samplesSincePop = 0;
+            // …and it bangs at the tailpipe once the pulse gets there,
+            // sometimes followed by a crackle or two
+            const travel = Math.round(this.runL.D + this.exPipe.D);
+            const strength = 0.7 + Math.random() * 0.6;
+            this.bangQ.push([travel, strength]);
+            const cr = P.crackle || 0;
+            for (let k = 0; k < 3; k++) {
+              if (Math.random() < cr * (0.7 - 0.2 * k)) {
+                this.bangQ.push([travel + Math.round((0.012 + Math.random() * 0.05 * (k + 1)) * sr),
+                  strength * (0.25 + Math.random() * 0.35)]);
+              }
+            }
           }
           this.cyclePop[c] = pop;
           // Piston reaches TDC and fires: mechanical impact on the block
           this.mechEnv += 0.5 + Math.random() * 0.8;
         }
-        if (x < w) {
+        const xe = x - this.cycleOff[c];
+        const wc = this.cycleW[c];
+        if (xe >= 0 && xe < wc) {
           // Exhaust blow-down pressure pulse (raised cosine squared)
-          let g = 0.5 - 0.5 * Math.cos(TWO_PI * x / w);
+          let g = 0.5 - 0.5 * Math.cos(TWO_PI * xe / wc);
           g *= g;
           let a, nMix;
           if (this.cycleFire[c]) {
@@ -352,8 +462,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       }
 
       // ---- exhaust tract: headers -> main pipe -> muffler ----
-      const hdr = this.runL.tick(exL) + this.runR.tick(exR);
-      const pipeOut = this.exPipe.tick(hdr * 0.8);
+      const hdr = this.runL.tick(exL, sL) + this.runR.tick(exR, sR);
+      const pipeOut = this.exPipe.tick(hdr * 0.8, sX);
       this.muff1 += (pipeOut - this.muff1) * this.muffK;
       this.muff2 += (this.muff1 - this.muff2) * this.muffK;
       const exhaust = (P.straightMix * pipeOut +
@@ -363,7 +473,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       const white = Math.random() * 2 - 1;
       this.inCol += (white - this.inCol) * this.inColK;
       const inExc = this.inCol * gate * (0.25 + 0.75 * load) * intakeNorm;
-      const intake = this.inPipe.tick(inExc) *
+      const intake = this.inPipe.tick(inExc, sI) *
         P.intakeGain * (0.35 + 0.65 * rpmNorm);
 
       // ---- mechanical: block modes + chain rattle ----
@@ -392,12 +502,14 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         this.spool += (tgt - this.spool) *
           (tgt > this.spool ? this.spoolUp : this.spoolDn);
         const s2 = this.spool * this.spool;
-        const f = P.whineMin + (P.whineMax - P.whineMin) * this.spool;
+        // blade-pass frequency wanders with the airflow; level flutters
+        const f = (P.whineMin + (P.whineMax - P.whineMin) * this.spool) *
+          (1 + 0.006 * this.whFm.tick());
         this.turboPh += f / sr;
         if (this.turboPh >= 1) this.turboPh -= 1;
         const whine = (Math.sin(TWO_PI * this.turboPh) * 0.75 +
           Math.sin(2 * TWO_PI * this.turboPh + 0.9) * 0.35) *
-          s2 * P.whineGain * 0.5;
+          s2 * P.whineGain * 0.5 * (0.8 + 0.2 * this.whAm.tick());
         this.hissLp += (white - this.hissLp) * this.hissK;
         const hiss = (white - this.hissLp) * s2 * P.hissGain * 0.6;
         // Throttle slams shut under boost -> pressure vents (blow-off)
@@ -475,6 +587,31 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       this.dcX = this.mLp;
       this.dcY = y;
       out[i] = y * P.masterGain * 0.7;
+
+      // ---- overrun bang layer (output 1) ----
+      if (bangOut) {
+        for (let q = this.bangQ.length - 1; q >= 0; q--) {
+          if (--this.bangQ[q][0] <= 0) {
+            const st = this.bangQ[q][1];
+            this.bangQ.splice(q, 1);
+            if (st > this.bangEnv) {
+              this.bangEnv = st;
+              this.bangDecay = Math.exp(-1 / ((0.005 + Math.random() * 0.012) * sr));
+              this.bpBangLo.set(90 + Math.random() * 140, 1.6, sr);
+            }
+          }
+        }
+        let bang = 0;
+        if (this.bangEnv > 1e-4) {
+          // crack: bright noise burst; body: low resonant thump
+          this.bangLp += (white - this.bangLp) * this.bangCrackK;
+          const crack = white - this.bangLp;
+          const body = this.bpBangLo.tick(white) * 4;
+          bang = this.bangPipe.tick((crack * 0.9 + body) * this.bangEnv);
+          this.bangEnv *= this.bangDecay;
+        }
+        bangOut[i] = bang * (P.bangLevel || 0) * 0.8;
+      }
     }
     return true;
   }

@@ -136,9 +136,21 @@ user gesture before audio can play).
     camshaft-rate chain rattle; an optional turbocharger spools with
     exhaust energy (whine, boost hiss, blow-off on lift); and on
     overrun, unburnt mixture ignites in the exhaust — pops emerge from
-    the same pipe model rather than being played back. The synthesized
-    signal runs through an **FX bus** (low-shelf bass exaggeration,
-    mid/treble EQ, parallel tanh saturation). **Every physical
+    the same pipe model rather than being played back, and each one
+    **bangs at the tailpipe** on a separate layer (unmuffled crack +
+    low thump, optional after-crackle) that's driven hard into
+    saturation and mixed past the compressor so it punches through.
+    No two cycles are alike: every cylinder burns slightly differently
+    (the half orders of a real engine), each combustion is jittered in
+    timing and duration, the muffler damps the pipe resonance inside its
+    round trip, and the exhaust waveguides are fractional delays re-tuned
+    by the exhaust gas temperature (resonances rise with load, with
+    thermal lag) plus a little flow turbulence. That removes the glassy,
+    over-pure tone and the "moiré" beading of harmonics sweeping through
+    static comb resonances. The synthesized signal runs through an **FX
+    bus** (low-shelf bass exaggeration, mid/treble EQ, parallel tanh
+    saturation), a **mix compressor** (Settings → Compressor, loudness
+    calibrated to stay put) and a final safety limiter. **Every physical
     parameter is tweakable live in [`tuner.html`](tuner.html)** (⚙
     Settings → Physical Engine Tuner): pipe lengths, muffler cutoff,
     firing pattern, cylinder count, turbo, pops… Presets can be
@@ -204,6 +216,7 @@ user gesture before audio can play).
 | Speed smoothing                | 0.05 – 1.5 s (lower = snappier vs GPS)      |
 | Engine preset (main screen)    | 13 engines, street cars to Formula 1        |
 | Listening position             | Inside the car (default) / Original / Outside |
+| Compressor (physical model)    | Off – 100% (default 50%)                    |
 | Engine sound                   | Physical model / Synthesized / sample packs |
 | Max RPM                        | 4,000 – 20,000                              |
 | Idle RPM                       | 500 – 5,000                                 |

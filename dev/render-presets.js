@@ -5,12 +5,16 @@
 // lift-off. Writes one WAV per preset × listening position and prints
 // level / bass-ratio stats, handy for balancing presets and positions.
 // `--scenario start` renders the synthesized ignition instead: key on →
-// starter cranking → catch → idle → key-off spin-down.
+// starter cranking → catch → idle → key-off spin-down. `--scenario sweep`
+// revs slowly from idle to near redline under load, then lifts off
+// (overrun pops); `--scenario cruise` holds 3,000 rpm at light load (for
+// judging how pure/static the tone is).
 //
 //   node render-presets.js                       # everything → ./renders
 //   node render-presets.js --preset f1-v10 --listener cabin --out /tmp/x
 //   node render-presets.js --seconds 12
 //   node render-presets.js --scenario start --listener original
+//   node render-presets.js --preset golf-gti --set exhaustFb=0,turbo=0   # overrides
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -29,7 +33,12 @@ const OUT = path.resolve(opt('out', path.join(__dirname, 'renders')));
 const ONLY_PRESET = opt('preset', null);
 const ONLY_LISTENER = opt('listener', null);
 const SCENARIO = opt('scenario', 'drive');
-const SECONDS = Number(opt('seconds', SCENARIO === 'start' ? 6 : 10));
+const OVERRIDES = Object.fromEntries((opt('set', '') || '').split(',').filter(Boolean)
+  .map((kv) => { const [k, v] = kv.split('='); return [k, isNaN(Number(v)) ? v : Number(v)]; }));
+const TAG = opt('tag', '');
+const COMP = opt('comp', null); // mix compressor amount 0..1 (default: the app's)
+const SECONDS = Number(opt('seconds',
+  { start: 6, sweep: 11, cruise: 6 }[SCENARIO] || 10));
 
 function findChromium() {
   if (process.env.CHROMIUM_PATH) return { executablePath: process.env.CHROMIUM_PATH };
@@ -74,8 +83,9 @@ async function main() {
       for (const lis of listeners) {
         if (ONLY_LISTENER && lis !== ONLY_LISTENER) continue;
         const r = await page.evaluate(renderInPage,
-          { id, lis, seconds: SECONDS, scenario: SCENARIO });
-        const suffix = SCENARIO === 'drive' ? '' : '_' + SCENARIO;
+          { id, lis, seconds: SECONDS, scenario: SCENARIO, overrides: OVERRIDES,
+            comp: COMP === null ? null : Number(COMP) });
+        const suffix = (SCENARIO === 'drive' ? '' : '_' + SCENARIO) + (TAG ? '_' + TAG : '');
         const file = path.join(OUT, `${id}_${lis}${suffix}.wav`);
         fs.writeFileSync(file, Buffer.from(r.wav, 'base64'));
         console.log(id.padEnd(14), lis.padEnd(9), r.rmsDb.toFixed(1).padStart(6),
@@ -89,15 +99,16 @@ async function main() {
 }
 
 /** Runs inside the page: render one preset from one listening position. */
-async function renderInPage({ id, lis, seconds, scenario }) {
+async function renderInPage({ id, lis, seconds, scenario, overrides, comp }) {
   const SR = 48000, STEP = 512; // control rate: one render-quantum multiple
   const frames = Math.round(seconds * SR / STEP) * STEP;
   const ctx = new OfflineAudioContext(2, frames, SR);
   const preset = EnginePresets.get(id);
   const sound = new PhysicalEngineSound();
-  sound.setParams(EnginePresets.physicalParams(id));
+  sound.setParams(Object.assign(EnginePresets.physicalParams(id), overrides || {}));
   sound.setListener(lis);
   sound.setVolume(0.7);
+  if (comp !== null && sound.setCompression) sound.setCompression(comp);
   await sound.start({ context: ctx });
   sound.fadeIn(0, scenario === 'start' ? 0.01 : 0.05);
 
@@ -127,6 +138,22 @@ async function renderInPage({ id, lis, seconds, scenario }) {
   for (let f = STEP; f < frames; f += STEP) {
     const t = f / SR;
     ctx.suspend(t).then(async () => {
+      if (scenario === 'sweep' || scenario === 'cruise') {
+        let rpm, load;
+        if (scenario === 'cruise') { rpm = 3000; load = 0.35; }
+        else if (t < 8) {
+          rpm = cfg.idleRpm + (cfg.maxRpm * 0.85 - cfg.idleRpm) * (t / 8);
+          load = 0.6;
+        } else {
+          const top = cfg.maxRpm * 0.85;
+          rpm = cfg.idleRpm + (top - cfg.idleRpm) * Math.exp(-(t - 8) / 0.9);
+          load = 0;
+        }
+        sound.update(rpm, load, cfg.maxRpm, 0, false, 0);
+        await new Promise((r) => setTimeout(r, 0));
+        ctx.resume();
+        return;
+      }
       if (scenario === 'start') {
         if (t < KEY_OFF) {
           let st = null;

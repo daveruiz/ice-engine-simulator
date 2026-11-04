@@ -37,11 +37,12 @@
     speedSmoothing: 0.3, // s: speed-follow lag (lower = snappier vs GPS)
     volume: 70,
     startVolume: 150, // ignition level, % relative to master volume
+    compressor: 50, // physical model mix compressor amount, %
     startSound: "synth", // physical model: 'synth' (starter motor model) | 'sample' (recorded clip)
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
     listener: "cabin", // physical model listening position: original|cabin|outside
-    rev: 2, // settings revision (one-off migrations in loadSettings)
+    rev: 3, // settings revision (one-off migrations in loadSettings)
   };
 
   let settings = loadSettings();
@@ -111,12 +112,32 @@
           s.listener = "cabin";
           s.rev = 2;
         }
+        // rev 3: presets gained texture/bang parameters. A sound still on its
+        // preset (every saved value matches) picks the new values up instead
+        // of reading as "modified".
+        if (!(stored.rev >= 3)) {
+          migratePresetParams(s.preset);
+          s.rev = 3;
+        }
         return s;
       }
     } catch (e) {
       /* private mode etc. */
     }
     return Object.assign({}, DEFAULTS);
+  }
+  function migratePresetParams(presetId) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PP.STORAGE_KEY) || "null");
+      if (!raw || !Presets.get(presetId)) return;
+      const ref = Presets.physicalParams(presetId);
+      const same = Object.keys(raw).every((k) =>
+        !(k in ref) || (typeof ref[k] === "number"
+          ? Math.abs(Number(raw[k]) - ref[k]) < 1e-6 : raw[k] === ref[k]));
+      if (same) PP.save(ref);
+    } catch (e) {
+      /* ignore */
+    }
   }
   function saveSettings() {
     try {
@@ -173,6 +194,7 @@
     speedo.setUnit(unitLabel().toUpperCase());
     sound.setVolume(settings.volume / 100);
     physicalSound.setListener(settings.listener);
+    physicalSound.setCompression(settings.compressor / 100);
     // The synthesized starter's reference level is the 150% default
     physicalSound.setStarterLevel(settings.startVolume / 150);
     setSource(settings.source);
@@ -250,6 +272,7 @@
     // Listening positions are part of the physical model
     $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("row-compressor").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
@@ -634,6 +657,7 @@
     ["set-revup", "out-revup", "revUpTime", fmtSec],
     ["set-revdown", "out-revdown", "revDownTime", fmtSec],
     ["set-volume", "out-volume", "volume", fmtPct],
+    ["set-compressor", "out-compressor", "compressor", (v) => (v === 0 ? "Off" : fmtPct(v))],
     ["set-startvol", "out-startvol", "startVolume", fmtPct],
   ];
 
