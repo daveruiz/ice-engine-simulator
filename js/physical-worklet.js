@@ -44,6 +44,13 @@
  *   perfectly periodic pulse train through static comb resonances gives
  *   pure, glassy partials that "bead" as they sweep through the combs.
  *
+ *   Structure-borne vibration: the combustion torque pulses shake the
+ *   engine on its mounts and the body panels re-radiate them as a low,
+ *   firing-rate rumble (lowpassed pulse train — mounts isolate the highs).
+ *   `vibration` is the engine's own shake (mounts, cylinder layout);
+ *   `vibGain` is how much reaches the listener (0 outside, set by the
+ *   cabin listening position).
+ *
  *   Output 1 is the overrun bang layer: when unburnt mixture ignites it
  *   cracks at the tailpipe (unmuffled), with optional after-crackle. It's
  *   kept separate so the host can saturate it hard and mix it past the
@@ -238,6 +245,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.spool = 0; this.turboPh = 0; this.boEnv = 0; this.hissLp = 0;
     this.samplesSincePop = 1e9;
     this.mLp = 0; this.dcX = 0; this.dcY = 0;
+    this.vib1 = 0; this.vib2 = 0; this.vibHp = 0;
 
     this._applyParams();
 
@@ -327,6 +335,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.kCool = tauCoef(5.0, sr);   // …and cools down slower
     this.bangPipe.set(D(0.32), 0.45, lpCoef(5000, sr));
     this.bangCrackK = lpCoef(1400, sr);
+    this.vibK = lpCoef(110, sr);   // mounts pass the low orders only
+    this.vibHpK = lpCoef(18, sr);  // (remove the pulse train's DC)
     this.kComb = tauCoef(0.04, sr);
     this.kStLock = tauCoef(0.004, sr);         // pinion locked to the ring gear
     this.stSpinDown = Math.exp(-1 / (0.45 * sr)); // free armature spin-down
@@ -580,7 +590,17 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       }
 
       // ---- mix, saturate, tone, DC-block ----
-      let sum = exhaust + intake + mech + chain + turbo + starter;
+      // ---- structure-borne vibration (body panels re-radiating) ----
+      let vib = 0;
+      const vg = (P.vibGain || 0) * (P.vibration === undefined ? 1 : P.vibration);
+      if (vg > 0) {
+        this.vib1 += (exL + exR - this.vib1) * this.vibK;
+        this.vib2 += (this.vib1 - this.vib2) * this.vibK;
+        this.vibHp += (this.vib2 - this.vibHp) * this.vibHpK;
+        vib = (this.vib2 - this.vibHp) * vg * 1.6;
+      }
+
+      let sum = exhaust + intake + mech + chain + turbo + starter + vib;
       sum = Math.tanh(sum * P.drive) * this.driveNorm;
       this.mLp += (sum - this.mLp) * this.masterK;
       const y = this.mLp - this.dcX + 0.995 * this.dcY;

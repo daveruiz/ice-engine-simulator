@@ -42,7 +42,7 @@
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
     listener: "cabin", // physical model listening position: original|cabin|outside
-    rev: 3, // settings revision (one-off migrations in loadSettings)
+    rev: 4, // settings revision (one-off migrations in loadSettings)
   };
 
   let settings = loadSettings();
@@ -112,12 +112,12 @@
           s.listener = "cabin";
           s.rev = 2;
         }
-        // rev 3: presets gained texture/bang parameters. A sound still on its
-        // preset (every saved value matches) picks the new values up instead
-        // of reading as "modified".
-        if (!(stored.rev >= 3)) {
+        // rev 3 (texture/bang params) and rev 4 (engine vibration): presets
+        // gained parameters. A sound still on its preset (every saved value
+        // matches) picks the new values up instead of reading as "modified".
+        if (!(stored.rev >= 4)) {
           migratePresetParams(s.preset);
-          s.rev = 3;
+          s.rev = 4;
         }
         return s;
       }
