@@ -14,14 +14,37 @@
   'use strict';
 
   const PP = window.PhysicalParams;
+  const Presets = window.EnginePresets;
   const $ = (id) => document.getElementById(id);
 
   let params = PP.load();
   const sound = new PhysicalEngineSound();
   sound.setParams(params);
 
-  const engine = new EngineSim({});   // default config, 7000 max rpm
+  // The bench runs the simulator's drivetrain (rev range, idle, gearbox)
+  // so a 19,000 rpm F1 preset actually revs to 19,000 here too.
+  const ENGINE_CFG_KEYS = Presets.ENGINE_KEYS;
+  function benchConfig() {
+    const st = Presets.readSettings();
+    const cfg = {};
+    for (const k of ENGINE_CFG_KEYS) if (typeof st[k] === 'number') cfg[k] = st[k];
+    if (cfg.shiftUpRpm && cfg.maxRpm) {
+      cfg.shiftUpRpm = Math.min(cfg.shiftUpRpm, cfg.maxRpm - 200);
+    }
+    return cfg;
+  }
+  const engine = new EngineSim(benchConfig());
   engine.setNeutral(true);
+  sound.setListener(Presets.readSettings().listener || 'original');
+
+  function syncBenchToSettings() {
+    engine.configure(benchConfig());
+    const sp = $('bench-speed');
+    sp.max = String(Math.round(engine.cfg.maxSpeed));
+    const st = Presets.readSettings();
+    sound.setListener(st.listener || 'original');
+    $('bench-listener').value = PP.listener(st.listener).id;
+  }
 
   // ---------- Parameter UI (generated from the schema) ----------
   const inputs = {}; // key -> {input, output, fmt}
@@ -108,13 +131,48 @@
     }
   }
 
-  // ---------- Preset I/O ----------
-  $('btn-preset-reset').addEventListener('click', () => {
-    params = PP.defaults();
+  // ---------- Engine presets ----------
+  const presetSel = $('preset-select');
+  Presets.fillSelect(presetSel);
+  presetSel.value = Presets.readSettings().preset || Presets.DEFAULT_ID;
+  const showPresetDesc = () => {
+    const p = Presets.get(presetSel.value);
+    $('preset-desc').textContent = p ? p.desc : '';
+  };
+  presetSel.addEventListener('change', showPresetDesc);
+  showPresetDesc();
+  $('btn-preset-load').addEventListener('click', () => {
+    const p = Presets.get(presetSel.value);
+    if (!p) return;
+    params = Presets.physicalParams(p.id);
     PP.save(params);
     sound.setParams(params);
     refreshUI();
+    // The simulator gets the matching drivetrain (live if it's open)
+    Presets.patchSettings(Object.assign({}, p.engine,
+      { preset: p.id, soundSet: 'physical' }));
+    syncBenchToSettings();
   });
+
+  // Listening position (shared with the simulator's setting)
+  const lisSel = $('bench-listener');
+  for (const L of PP.LISTENERS) {
+    const o = document.createElement('option');
+    o.value = L.id;
+    o.textContent = L.name;
+    lisSel.appendChild(o);
+  }
+  lisSel.addEventListener('change', () => {
+    sound.setListener(lisSel.value);
+    Presets.patchSettings({ listener: lisSel.value });
+  });
+
+  // Simulator settings changed in another tab: follow them
+  window.addEventListener('storage', (e) => {
+    if (e.key === Presets.SETTINGS_KEY) syncBenchToSettings();
+  });
+
+  // ---------- Preset I/O ----------
   $('btn-preset-export').addEventListener('click', () => {
     $('preset-json').value = JSON.stringify(params, null, 2);
   });
@@ -135,17 +193,28 @@
   let mode = 'rev';        // 'rev' | 'drive'
   let throttle = 0;        // 0..1 (rev mode)
   let wotHeld = false;
+  let ignition = null;     // IgnitionSequence while the engine is starting
+
+  function crank() {
+    ignition = new IgnitionSequence({
+      idleRpm: engine.cfg.idleRpm,
+      crankRpm: params.crankRpm,
+      crankTime: params.crankTime,
+    });
+  }
 
   $('btn-run').addEventListener('click', async () => {
     if (running) {
       sound.stop();
       running = false;
+      ignition = null;
       $('btn-run').textContent = '▶ START ENGINE';
       return;
     }
     try {
       await sound.start();
-      sound.fadeIn(0, 0.3); // start() now leaves the master silent
+      sound.fadeIn(0, 0.03); // start() leaves the master silent
+      crank(); // the synthesized starter brings the engine to life
     } catch (err) {
       alert('Could not start audio: ' + err.message);
       return;
@@ -189,6 +258,16 @@
   });
   wotBtn.addEventListener('pointerup', () => holdWot(false));
   wotBtn.addEventListener('pointercancel', () => holdWot(false));
+  $('btn-crank').addEventListener('click', async () => {
+    if (!running) { $('btn-run').click(); return; }
+    // Key off for a moment, then crank again: restart the audio graph so
+    // the model starts from rest
+    sound.stop();
+    await new Promise((r) => setTimeout(r, 350));
+    await sound.start();
+    sound.fadeIn(0, 0.03);
+    crank();
+  });
   $('btn-zero').addEventListener('click', () => {
     if (mode === 'rev') {
       $('bench-throttle').value = '0';
@@ -214,22 +293,29 @@
     if (mode === 'rev') {
       engine.setRevDemand(wotHeld ? 1 : throttle);
     } else if (wotHeld) {
-      engine.setTargetSpeed(250);
+      engine.setTargetSpeed(engine.cfg.maxSpeed);
     }
     engine.update(dt);
 
-    if (running) {
+    let rpm = engine.rpm, load = engine.throttle;
+    if (running && ignition) {
+      const st = ignition.update(dt);
+      rpm = st.rpm; load = st.load;
+      sound.update(rpm, load, engine.cfg.maxRpm, params.cylinders, false, 0, st);
+      if (st.done) ignition = null;
+    } else if (running) {
       sound.update(engine.rpm, engine.throttle, engine.cfg.maxRpm,
         params.cylinders, engine.shifting, engine.shiftDir);
     }
 
-    $('bench-rpm').textContent = String(Math.round(engine.rpm / 10) * 10);
-    $('bench-load').textContent = String(Math.round(engine.throttle * 100));
+    $('bench-rpm').textContent = String(Math.round(rpm / 10) * 10);
+    $('bench-load').textContent = String(Math.round(load * 100));
     $('bench-gear').textContent = engine.displayGear;
     requestAnimationFrame(loop);
   }
 
   buildParamsUI();
+  syncBenchToSettings();
   requestAnimationFrame(loop);
 
   // Debug hook

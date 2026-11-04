@@ -98,12 +98,25 @@ user gesture before audio can play).
   - **Braking**: under hard braking the gear is held (no shifting mid-stop);
     the gears drop through only as the car crawls to a halt. Downshifts get a
     rev-match throttle blip in the sound; upshifts get a torque cut.
-- **Ignition & shutdown**: turning the key plays a shared cranking clip
-  ([`sounds/start.ogg`](sounds/start.ogg)) and, as the engine catches
-  (~0.8 s in), swells the generated engine up under the sample's tail — for
-  whichever sound engine is active. Stopping winds the revs down to a halt
-  (the tacho falls with it) before the sound is cut, instead of an abrupt
-  fade.
+- **Ignition & shutdown**: with the physical model the engine start is
+  **synthesized** by default (Settings → Start sound): turning the key
+  pulls in the solenoid (clack) and slams the starter pinion onto the
+  flywheel ring gear (clank); the starter motor — gear-mesh whine at
+  ring-teeth × crank speed, commutator buzz, brush noise — spins the crank
+  with no combustion, slowing into every compression stroke (the
+  "rur-rur-rur", with the starter straining and dropping pitch on each
+  one); the odd cylinder fires, then combustion ramps in with misfires,
+  the revs flare, the engine overruns the pinion (its whine shoots up)
+  and the starter disengages and spins down. Key-off cuts combustion, so
+  the engine winds down on compression alone and shudders to a stop.
+  Cranking speed/time, compression drag, ring gear teeth and levels are
+  per engine (Starter & ignition group in the tuner, set by every preset:
+  a diesel cranks slow and lumpy, a V12 smooth, an F1 fast on its external
+  starter). The recorded clip ([`sounds/start.ogg`](sounds/start.ogg)) is
+  still available — and used by the other sound engines: it plays as the
+  key turns and the generated engine swells up under its tail as it
+  catches (~0.8 s in). Stopping winds the revs down to a halt (the tacho
+  falls with it) before the sound is cut, instead of an abrupt fade.
 - **Sound** — three interchangeable engines (Settings → Sound):
   - **Synthesized** (`js/sound.js`, always available): firing frequency
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
@@ -132,6 +145,29 @@ user gesture before audio can play).
     exported/imported as JSON; the tuned set is stored in
     `localStorage` and used by the simulator. Defaults model a
     cross-plane V8.
+  - **Engine presets** ([`js/engine-presets.js`](js/engine-presets.js),
+    ⚙ Settings → Engine preset, also loadable in the tuner): one pick sets
+    the whole car — the physical sound model _and_ the drivetrain (rev
+    range, idle, gears, shift points and shift speed, top speed, rev
+    response). Street: VW Golf TDI (I4 diesel), Golf GTI (I4 turbo),
+    Toyota GR Yaris (I3 turbo), Subaru WRX STI (boxer-4 with
+    unequal-length headers), BMW M3 E46 (I6), V8 muscle car (the original
+    default). Sports: Porsche 911 GT3 (flat-6), Ferrari 458 (flat-plane
+    V8), Lamborghini Huracán (V10), Ferrari 812 (V12), Mazda RX-8
+    (rotary). Racing: Formula 1 V10 (2005, 19,000 rpm) and F1 V6 turbo
+    hybrid (2014+). Real-world figures for the drivetrain; the acoustic
+    values are tuned by ear to evoke each engine. Tweaking anything
+    afterwards marks the preset as modified, with a one-tap restore.
+  - **Listening position** (Settings, or the 🎧 button in the bottom bar
+    to cycle): _Original_ (the raw model, next to the engine), _Inside_
+    (driver's seat: bodywork lowpass, cabin bass boom, firewall intake
+    noise, muffled tailpipe, a small damped room) and _Outside_ (a few
+    metres away: tailpipe-dominated, brighter bark, ground and street
+    reflections). Positions are relative modifiers layered automatically
+    on top of whatever engine is active (preset or hand-tuned), plus an
+    acoustic-space stage (lowpass, boom resonance, generated impulse
+    response) after the FX bus — see `LISTENERS` in
+    [`js/physical-params.js`](js/physical-params.js).
   - **Sample packs** (`js/samples.js`): an engine library registered in
     the editable [`sounds/engines.js`](sounds/engines.js) — one folder
     per engine, each configured by a commented
@@ -156,15 +192,19 @@ user gesture before audio can play).
 | Speed source                   | Manual slider / Pedals / GPS                |
 | Units                          | km/h / mph                                  |
 | Speed smoothing                | 0.05 – 1.5 s (lower = snappier vs GPS)      |
+| Engine preset                  | 13 engines, street cars to Formula 1        |
+| Listening position             | Original / Inside the car / Outside         |
 | Engine sound                   | Physical model / Synthesized / sample packs |
-| Max RPM                        | 4,000 – 12,000                              |
-| Idle RPM                       | 500 – 1,500                                 |
+| Max RPM                        | 4,000 – 20,000                              |
+| Idle RPM                       | 500 – 5,000                                 |
 | Cylinders                      | 2 – 12                                      |
 | Neutral rev-up / rev-down time | 0.1 – 2.5 s                                 |
 | Gears                          | 3 – 10                                      |
 | Shift-up / shift-down RPM      | configurable with hysteresis guard          |
+| Shift time                     | 0.03 – 0.6 s (torque cut per gear change)   |
 | Max speed                      | 120 – 400 km/h                              |
 | Volume                         | 0 – 100%                                    |
+| Start sound (physical model)   | Synthesized starter / recorded clip         |
 | Start sound volume             | 0 – 200% (relative to volume)               |
 
 New installs default to **GPS** input and the **physical** engine sound.
@@ -192,7 +232,7 @@ If you enjoy it, **give the repo a ⭐ — it's the best kind of thank-you.**
 
 Possible future ideas:
 
-- More physical-model presets (inline-4 turbo, flat-plane V8, diesel…)
+- More listening positions (e.g. drive-by / pit lane, helmet cam)
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available
 

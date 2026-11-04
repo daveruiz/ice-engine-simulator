@@ -12,6 +12,11 @@
  * describe a cross-plane V8, overridden by whatever the tuner page
  * (tuner.html) saved to localStorage. A 'storage' listener applies tuner
  * changes live even when the tuner runs in another tab.
+ *
+ * On top of the engine parameters sits the listening position
+ * (setListener: original / cabin / outside — see PhysicalParams.LISTENERS):
+ * relative parameter modifiers plus an acoustic-space stage (transmission
+ * lowpass, cabin boom, generated impulse response) after the FX bus.
  */
 class PhysicalEngineSound {
   constructor() {
@@ -19,7 +24,12 @@ class PhysicalEngineSound {
     this.node = null;
     this.running = false;
     this.volume = 0.7;
-    this.params = window.PhysicalParams.load();
+    // baseParams: the engine as tuned/preset. params: what the DSP runs,
+    // i.e. baseParams with the listening-position modifiers applied.
+    this.listener = 'original';
+    this.starterLevel = 1;
+    this.baseParams = window.PhysicalParams.load();
+    this.params = this._effective();
     window.addEventListener('storage', (e) => {
       if (e.key === window.PhysicalParams.STORAGE_KEY) {
         this.setParams(window.PhysicalParams.load());
@@ -27,16 +37,29 @@ class PhysicalEngineSound {
     });
   }
 
-  async start() {
+  _effective() {
+    return window.PhysicalParams.applyListener(this.baseParams, this.listener);
+  }
+
+  /**
+   * Build the audio graph. Normally creates its own realtime context;
+   * `opts.context` (+ optional `opts.destination`) attaches to an existing
+   * one instead — e.g. an OfflineAudioContext for headless rendering.
+   */
+  async start(opts = {}) {
     if (this.running) return;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx({ latencyHint: 'interactive' });
+    let ctx = opts.context;
+    this._ownsCtx = !ctx;
+    if (!ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      ctx = new Ctx({ latencyHint: 'interactive' });
+    }
     if (!ctx.audioWorklet) {
-      ctx.close().catch(() => {});
+      if (this._ownsCtx) ctx.close().catch(() => {});
       throw new Error('AudioWorklet not supported by this browser');
     }
-    await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=17');
+    if (this._ownsCtx) await ctx.resume();
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=19');
     this.ctx = ctx;
 
     this.node = new AudioWorkletNode(ctx, 'physical-engine', {
@@ -54,9 +77,11 @@ class PhysicalEngineSound {
     comp.ratio.value = 8;
     comp.attack.value = 0.003;
     comp.release.value = 0.15;
-    this._buildFx(ctx, this.node, this.master);
+    this.fxOut = ctx.createGain();
+    this._buildFx(ctx, this.node, this.fxOut);
+    this._buildSpace(ctx, this.fxOut, this.master);
     this.master.connect(comp);
-    comp.connect(ctx.destination);
+    comp.connect(opts.destination || ctx.destination);
     // Master is left silent; main.js fades it in (see fadeIn) so the
     // starter clip can crank first and the engine swell in as it catches.
     this.running = true;
@@ -126,6 +151,108 @@ class PhysicalEngineSound {
     this.satWet.gain.setTargetAtTime(p.satMix, t, S);
   }
 
+  /**
+   * Acoustic path to the listener (see PhysicalParams.LISTENERS):
+   *   fx out -> transmission lowpass -> boom peak -> dry ----------> master
+   *                                         └-> convolver[pos] -> wet -┘
+   * One convolver per listening position with its own generated impulse
+   * response; switching positions only ramps gains (no clicks), and only
+   * the active convolver stays connected so idle ones cost nothing.
+   */
+  _buildSpace(ctx, from, to) {
+    this.spLp = ctx.createBiquadFilter();
+    this.spLp.type = 'lowpass';
+    this.spBoom = ctx.createBiquadFilter();
+    this.spBoom.type = 'peaking';
+    this.spDry = ctx.createGain();
+    from.connect(this.spLp);
+    this.spLp.connect(this.spBoom);
+    this.spBoom.connect(this.spDry);
+    this.spDry.connect(to);
+    this.spaces = {};
+    for (const L of window.PhysicalParams.LISTENERS) {
+      if (!L.space) continue;
+      const conv = ctx.createConvolver();
+      conv.buffer = PhysicalEngineSound._makeIR(ctx, L.space.ir);
+      const wet = ctx.createGain();
+      wet.gain.value = 0;
+      conv.connect(wet);
+      wet.connect(to);
+      this.spaces[L.id] = { conv, wet, connected: false, timer: null };
+    }
+    this._applySpace(true);
+  }
+
+  _applySpace(instant) {
+    if (!this.ctx || !this.spLp) return;
+    const L = window.PhysicalParams.listener(this.listener);
+    const sp = L.space;
+    const t = this.ctx.currentTime;
+    const S = instant ? 0.001 : 0.08;
+    const nyq = this.ctx.sampleRate / 2;
+    this.spLp.frequency.setTargetAtTime(
+      Math.min(sp ? sp.lowpass : 20000, nyq * 0.95), t, S);
+    this.spLp.Q.setTargetAtTime(sp ? sp.lowpassQ : 0.5, t, S);
+    this.spBoom.frequency.setTargetAtTime(sp ? sp.boomFreq : 68, t, S);
+    this.spBoom.Q.setTargetAtTime(sp ? sp.boomQ : 1, t, S);
+    this.spBoom.gain.setTargetAtTime(sp ? sp.boomGain : 0, t, S);
+    for (const id of Object.keys(this.spaces)) {
+      const s = this.spaces[id];
+      const active = id === L.id;
+      clearTimeout(s.timer);
+      if (active && !s.connected) {
+        this.spBoom.connect(s.conv);
+        s.connected = true;
+      }
+      s.wet.gain.setTargetAtTime(active ? sp.mix : 0, t, S);
+      if (!active && s.connected) {
+        // Let the tail fade out before unplugging the idle convolver
+        s.timer = setTimeout(() => {
+          try { this.spBoom.disconnect(s.conv); } catch (e) { /* gone */ }
+          s.connected = false;
+        }, instant ? 0 : 1200);
+      }
+    }
+  }
+
+  /**
+   * Procedural stereo impulse response: a few discrete early reflections
+   * (cabin panels / ground bounce) followed by an exponentially decaying,
+   * lowpassed noise tail (-60 dB at `decay`). `width` decorrelates L/R.
+   */
+  static _makeIR(ctx, o) {
+    const sr = ctx.sampleRate;
+    const len = Math.max(1, Math.ceil((o.predelay + o.decay) * sr));
+    const buf = ctx.createBuffer(2, len, sr);
+    const k = 1 - Math.exp(-2 * Math.PI * o.tone / sr);
+    // Deterministic noise so every start sounds the same
+    let seed = 22222;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 1073741823.5 - 1;
+    };
+    const L = buf.getChannelData(0), R = buf.getChannelData(1);
+    const pre = Math.round(o.predelay * sr);
+    let lpL = 0, lpR = 0;
+    for (let i = pre; i < len; i++) {
+      const tt = (i - pre) / sr;
+      const env = Math.exp(-6.9 * tt / o.decay);
+      const c = rnd(), a = rnd(), b = rnd();
+      lpL += ((c * (1 - o.width) + a * o.width) - lpL) * k;
+      lpR += ((c * (1 - o.width) + b * o.width) - lpR) * k;
+      L[i] = lpL * env * 0.6;
+      R[i] = lpR * env * 0.6;
+    }
+    for (const [time, gain] of o.early || []) {
+      const i = Math.round(time * sr);
+      if (i < len) {
+        L[i] += gain;
+        R[Math.min(len - 1, i + Math.round(0.0007 * sr * o.width))] += gain * 0.9;
+      }
+    }
+    return buf;
+  }
+
   /** tanh saturation curve normalized to ±1 at full scale. */
   static _satCurve(drive) {
     const n = 1024;
@@ -143,9 +270,13 @@ class PhysicalEngineSound {
     this.running = false;
     const ctx = this.ctx;
     this.master.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
-    setTimeout(() => ctx.close().catch(() => {}), 300);
+    if (this._ownsCtx) setTimeout(() => ctx.close().catch(() => {}), 300);
+    for (const id of Object.keys(this.spaces || {})) {
+      clearTimeout(this.spaces[id].timer);
+    }
     this.ctx = null;
     this.node = null;
+    this.spLp = null;
   }
 
   /**
@@ -153,21 +284,47 @@ class PhysicalEngineSound {
    * setting from the main page is ignored — cylinder count and geometry
    * belong to the physical parameter set (tune them in tuner.html).
    */
-  update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir) {
+  update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir, ign) {
     if (!this.running || !this.node) return;
     // Upshift: torque cut. Downshift: rev-match blip.
     let load = throttle;
     if (shifting) {
       load = shiftDir < 0 ? Math.max(throttle, 0.55) : throttle * 0.15;
     }
-    this.node.port.postMessage({ type: 'state', rpm, load, maxRpm });
+    // ign (optional): { comb: combustion 0..1, crank: starter engaged }.
+    // Omitted = engine running normally.
+    this.node.port.postMessage({
+      type: 'state', rpm, load, maxRpm,
+      comb: ign ? ign.comb : 1,
+      crank: !!(ign && ign.crank),
+      starterLevel: this.starterLevel,
+    });
   }
 
-  /** Replace the parameter set (tuner sliders); safe while running. */
+  /** Synthesized starter/solenoid level (1 = as tuned). */
+  setStarterLevel(v) {
+    this.starterLevel = v;
+  }
+
+  /** Replace the engine parameter set (tuner/preset); safe while running. */
   setParams(params) {
-    this.params = params;
+    this.baseParams = params;
+    this._pushParams();
+  }
+
+  /** Move the listener: 'original' | 'cabin' | 'outside'. Live. */
+  setListener(id) {
+    id = window.PhysicalParams.listener(id).id;
+    if (id === this.listener) return;
+    this.listener = id;
+    this._pushParams();
+    this._applySpace(false);
+  }
+
+  _pushParams() {
+    this.params = this._effective();
     if (this.node) {
-      this.node.port.postMessage({ type: 'params', params });
+      this.node.port.postMessage({ type: 'params', params: this.params });
       this._applyFx();
     }
   }
@@ -180,4 +337,62 @@ class PhysicalEngineSound {
   }
 }
 
+/**
+ * IgnitionSequence — the synthesized engine start, as a control curve fed
+ * to PhysicalEngineSound.update() (shared by the simulator and the tuner):
+ *
+ *   key on → solenoid + pinion engage, the starter spins the crank up to
+ *   cranking speed (no combustion: compression strokes drag it, see
+ *   compressionDip) → a stray firing or two near the end → catch:
+ *   combustion ramps in with misfires, revs flare to ~1.8× idle, the
+ *   pinion is overrun and disengages → revs settle to idle.
+ *
+ * Cranking speed and time come from the physical params (crankRpm,
+ * crankTime); the crank time varies ±15% per start like a real engine.
+ */
+class IgnitionSequence {
+  constructor({ idleRpm, crankRpm, crankTime, randomize = true }) {
+    this.idle = idleRpm;
+    this.crank = Math.min(crankRpm, idleRpm * 0.8);
+    this.crankTime = crankTime * (randomize ? 0.85 + Math.random() * 0.3 : 1);
+    this.t = 0;
+    this.engaged = true;
+    this.done = false;
+  }
+
+  /** Advance dt seconds → { rpm, load, comb, crank, done }. */
+  update(dt) {
+    this.t += dt;
+    const t = this.t, C = this.crank, idle = this.idle;
+    const smooth = (p) => p * p * (3 - 2 * p);
+    const SPIN_UP = 0.18;   // s: starter accelerating the crank from rest
+    const RISE = 0.22;      // s: catch → flare peak
+    const FALL = 0.95;      // s: flare peak → idle
+    const peak = idle * 1.8;
+    let rpm, comb = 0, load = 0;
+    if (t < this.crankTime) {
+      rpm = t < SPIN_UP ? C * smooth(t / SPIN_UP) : C * (1 + 0.04 * (t - SPIN_UP));
+      // Near the end the odd cylinder fires on its own
+      if (t > this.crankTime * 0.65) comb = 0.25;
+    } else {
+      const te = t - this.crankTime;
+      const C2 = C * (1 + 0.04 * Math.max(0, this.crankTime - SPIN_UP));
+      comb = Math.min(1, 0.45 + (0.55 * te) / 0.3);
+      if (te < RISE) {
+        rpm = C2 + (peak - C2) * smooth(te / RISE);
+        load = 0.75; // all cylinders firing hard to pick the revs up
+      } else {
+        const p = Math.min(1, (te - RISE) / FALL);
+        rpm = peak + (idle - peak) * smooth(p);
+        load = 0.35 * (1 - p);
+        if (p >= 1) this.done = true;
+      }
+      // Pinion overrun: the engine now drives the starter → it disengages
+      if (this.engaged && (rpm > C2 * 1.7 || te > 0.25)) this.engaged = false;
+    }
+    return { rpm, load, comb, crank: this.engaged, done: this.done };
+  }
+}
+
 window.PhysicalEngineSound = PhysicalEngineSound;
+window.IgnitionSequence = IgnitionSequence;

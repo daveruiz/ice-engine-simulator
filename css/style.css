@@ -346,6 +346,28 @@ html, body {
 }
 .bar-btn:active { background: var(--panel-2); }
 .bar-btn.danger { border-color: var(--redline); color: var(--redline); }
+.bar-btn.hidden { display: none; }
+#bottom-bar .bar-btn { padding: 14px 6px; letter-spacing: 0.08em; }
+
+/* Segmented control (listening position) */
+.seg { display: flex; gap: 6px; }
+.seg-btn {
+  flex: 1;
+  padding: 14px 4px;
+  font-size: clamp(0.72rem, 2.4vw, 0.95rem);
+  letter-spacing: 0.12em;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--dim);
+  cursor: pointer;
+}
+.seg-btn.active {
+  border-color: var(--accent-2);
+  color: var(--text);
+  background: var(--panel-2);
+}
+#preset-hint, #listener-hint { margin-top: 0; }
 
 /* ---------- Settings panel ---------- */
 #settings-panel {
