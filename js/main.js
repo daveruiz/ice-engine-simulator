@@ -65,12 +65,10 @@
     overlay: $("start-overlay"),
     app: $("app"),
     gear: $("gear-value"),
-    shiftLight: $("shift-light"),
-    roRpm: $("ro-rpm"),
-    roSpeed: $("ro-speed"),
-    roThrottle: $("ro-throttle"),
-    roSpeedUnit: $("ro-speed-unit"),
-    speedUnitLabel: $("speed-unit-label"),
+    shiftLights: $("shift-lights"),
+    shiftLeds: Array.from(document.querySelectorAll("#shift-lights i")),
+    loadFill: $("load-fill"),
+    loadValue: $("load-value"),
     slider: $("speed-slider"),
     manualControls: $("manual-controls"),
     pedalControls: $("pedal-controls"),
@@ -87,6 +85,8 @@
     minorPerMajor: 5,
     tickLabel: (v) => Math.round(v / 1000),
     digitalFmt: (v) => String(Math.round(v / 10) * 10),
+    unit: "RPM ×1000",
+    arcColor: "#ff5a1f",
   });
   const speedo = new Gauge($("speedo"), {
     max: displaySpeed(settings.maxSpeed),
@@ -94,6 +94,8 @@
     redFrom: Infinity,
     minorPerMajor: 4,
     digitalFmt: (v) => String(Math.round(v)),
+    unit: settings.units === "mph" ? "MPH" : "KM/H",
+    arcColor: "#2fd0ff",
   });
 
   // ---------- Settings persistence ----------
@@ -167,8 +169,8 @@
     tacho.setRange(settings.maxRpm, rpmStep(settings), redlineFor(settings));
     speedo.setRange(displaySpeed(settings.maxSpeed), speedoStep(), Infinity);
     el.slider.max = String(Math.round(settings.maxSpeed));
-    el.roSpeedUnit.textContent = unitLabel();
-    el.speedUnitLabel.textContent = unitLabel();
+    paintRange(el.slider);
+    speedo.setUnit(unitLabel().toUpperCase());
     sound.setVolume(settings.volume / 100);
     physicalSound.setListener(settings.listener);
     // The synthesized starter's reference level is the 150% default
@@ -213,6 +215,11 @@
     }
     sel.value = p ? p.id : "";
     sel.title = p ? p.desc : "";
+    // Live spec next to the name (reflects tweaks, not just the preset)
+    const cyl = PP.load().cylinders;
+    $("top-spec").textContent = p
+      ? `${cyl} CYL · ${fmtNum(settings.maxRpm)} RPM · ${settings.gears} SPD`
+      : "";
     $("btn-preset-restore").classList.toggle("hidden", !modified);
   }
 
@@ -597,21 +604,37 @@
   }
 
   // ---------- Settings UI ----------
+  const fmtNum = (v) => Math.round(v).toLocaleString("en-US");
+  const fmtRpm = (v) => fmtNum(v) + " rpm";
+  const fmtSec = (v) => v.toFixed(2) + " s";
+  const fmtPct = (v) => v + " %";
+
+  /** Fill a range track up to its thumb (CSS reads --p). */
+  function paintRange(input) {
+    const min = Number(input.min) || 0;
+    const max = Number(input.max) || 100;
+    const p = ((Number(input.value) - min) / (max - min)) * 100;
+    input.style.setProperty("--p", Math.max(0, Math.min(100, p)) + "%");
+  }
+  document.addEventListener("input", (e) => {
+    if (e.target.type === "range") paintRange(e.target);
+  });
+
   const bindings = [
     // [element id, output id, settings key, format]
-    ["set-maxrpm", "out-maxrpm", "maxRpm", (v) => v],
-    ["set-idlerpm", "out-idlerpm", "idleRpm", (v) => v],
-    ["set-cylinders", "out-cylinders", "cylinders", (v) => v],
-    ["set-gears", "out-gears", "gears", (v) => v],
-    ["set-shiftup", "out-shiftup", "shiftUpRpm", (v) => v],
-    ["set-shiftdown", "out-shiftdown", "shiftDownRpm", (v) => v],
-    ["set-shifttime", "out-shifttime", "shiftTime", (v) => v.toFixed(2) + "s"],
-    ["set-maxspeed", "out-maxspeed", "maxSpeed", (v) => v],
-    ["set-speedsmooth", "out-speedsmooth", "speedSmoothing", (v) => v.toFixed(2) + "s"],
-    ["set-revup", "out-revup", "revUpTime", (v) => v.toFixed(2) + "s"],
-    ["set-revdown", "out-revdown", "revDownTime", (v) => v.toFixed(2) + "s"],
-    ["set-volume", "out-volume", "volume", (v) => v + "%"],
-    ["set-startvol", "out-startvol", "startVolume", (v) => v + "%"],
+    ["set-maxrpm", "out-maxrpm", "maxRpm", fmtRpm],
+    ["set-idlerpm", "out-idlerpm", "idleRpm", fmtRpm],
+    ["set-cylinders", "out-cylinders", "cylinders", (v) => String(v)],
+    ["set-gears", "out-gears", "gears", (v) => String(v)],
+    ["set-shiftup", "out-shiftup", "shiftUpRpm", fmtRpm],
+    ["set-shiftdown", "out-shiftdown", "shiftDownRpm", fmtRpm],
+    ["set-shifttime", "out-shifttime", "shiftTime", fmtSec],
+    ["set-maxspeed", "out-maxspeed", "maxSpeed", (v) => fmtNum(v) + " km/h"],
+    ["set-speedsmooth", "out-speedsmooth", "speedSmoothing", fmtSec],
+    ["set-revup", "out-revup", "revUpTime", fmtSec],
+    ["set-revdown", "out-revdown", "revDownTime", fmtSec],
+    ["set-volume", "out-volume", "volume", fmtPct],
+    ["set-startvol", "out-startvol", "startVolume", fmtPct],
   ];
 
   function syncSettingsUI() {
@@ -622,7 +645,9 @@
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
       $(outId).textContent = fmt(settings[key]);
+      paintRange($(inputId));
     }
+    paintRange(el.slider);
   }
 
   function initSettingsUI() {
@@ -694,6 +719,7 @@
       if (v < 0) v = settings.maxSpeed;
       v = Math.min(v, settings.maxSpeed);
       el.slider.value = String(v);
+      paintRange(el.slider);
       engine.setTargetSpeed(v);
     });
   });
@@ -781,6 +807,7 @@
     }
     engineOn = true;
     el.engineToggle.textContent = "■ STOP ENGINE";
+    el.engineToggle.classList.remove("primary");
     if (withStarter && sound.ctx && synthStart(sound)) {
       // Starter motor, cranking and catch are all synthesized by the model
       const p = physicalSound.params;
@@ -806,11 +833,13 @@
     engineOn = false;
     cranking = null;
     el.engineToggle.textContent = "▶ START ENGINE";
+    el.engineToggle.classList.add("primary");
     // Car comes to a stop with the engine — don't resume mid-speed next start.
     engine.speed = 0;
     engine.setTargetSpeed(0);
     pedalSpeed = 0;
     el.slider.value = "0";
+    paintRange(el.slider);
     if (opts.spinDown === false) {
       sound.stop();
       return;
@@ -967,19 +996,38 @@
     tacho.draw();
     speedo.draw();
 
-    // Readouts
-    el.gear.textContent = dispGear;
-    el.roRpm.textContent = String(Math.round(dispRpm / 10) * 10);
-    el.roSpeed.textContent = String(Math.round(displaySpeed(engine.speed)));
-    el.roThrottle.textContent = String(Math.round(dispThrottle * 100));
-    el.shiftLight.classList.toggle(
-      "on",
-      engineOn &&
-        !cranking &&
-        (engine.rpm >= redlineFor(settings) || engine.shifting),
-    );
+    // Center stack: gear, load meter, shift lights
+    if (el.gear.textContent !== dispGear) el.gear.textContent = dispGear;
+    const loadPct = Math.round(dispThrottle * 100);
+    el.loadFill.style.width = loadPct + "%";
+    // keep the gradient anchored to the full track, not the fill
+    el.loadFill.style.setProperty("--load-bg", (loadPct > 0 ? 10000 / loadPct : 100) + "%");
+    el.loadValue.textContent = loadPct + "%";
+    updateShiftLights(engineOn && !cranking ? engine.rpm : 0);
 
     requestAnimationFrame(loop);
+  }
+
+  /**
+   * Shift lights: LEDs fill in over the last stretch before the shift
+   * point (green → amber → red) and all flash once it's time to shift or
+   * the engine is bouncing off the limiter.
+   */
+  let ledsLit = -1, ledsFlash = false;
+  function updateShiftLights(rpm) {
+    const hi = Math.min(settings.shiftUpRpm, settings.maxRpm - 200);
+    const lo = Math.max(settings.idleRpm, hi - 0.35 * (settings.maxRpm - settings.idleRpm));
+    const n = el.shiftLeds.length;
+    const flash = rpm > 0 && (rpm >= hi || engine.limiting);
+    const lit = flash ? n : Math.max(0, Math.min(n, Math.round(((rpm - lo) / (hi - lo)) * n)));
+    if (lit !== ledsLit) {
+      el.shiftLeds.forEach((led, i) => led.classList.toggle("on", i < lit));
+      ledsLit = lit;
+    }
+    if (flash !== ledsFlash) {
+      el.shiftLights.classList.toggle("flash", flash);
+      ledsFlash = flash;
+    }
   }
 
   function onResize() {
@@ -1023,6 +1071,7 @@
   // Debug/testing hook
   window.__ice = {
     engine,
+    tacho,
     get sound() {
       return sound;
     },

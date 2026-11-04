@@ -6,7 +6,8 @@
 <meta name="theme-color" content="#0b0e13">
 <title>Engine Tuner — ICE Simulator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🔧%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=33">
+<link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css?v=35">
 <style>html { overflow: auto; height: auto; }</style>
 </head>
 <body class="tuner-page">
@@ -14,14 +15,14 @@
 <div id="tuner">
   <header id="tuner-header">
     <div>
-      <h1>ENGINE TUNER</h1>
-      <p class="hint">Physically modeled engine — every slider is a live
-      physical property. Changes are saved instantly and used by the
-      simulator's “Physical model” engine.</p>
+      <h1>Engine tuner</h1>
+      <p class="hint">Every slider is a live physical property of the modeled
+      engine. Changes save instantly and the simulator's physical model uses them.</p>
     </div>
     <a class="bar-btn link-btn" href="index.html">← SIMULATOR</a>
   </header>
 
+  <aside id="tuner-side">
   <!-- Test bench: run the engine while tweaking -->
   <section id="bench">
     <div id="bench-row">
@@ -56,13 +57,13 @@
     </div>
     <div class="quick-buttons">
       <button class="quick" id="btn-blip">BLIP</button>
-      <button class="quick" id="btn-wot">HOLD = FULL THROTTLE</button>
+      <button class="quick" id="btn-wot" title="Full throttle while held">FULL</button>
       <button class="quick" id="btn-zero">LIFT OFF</button>
-      <button class="quick" id="btn-crank">🔑 RESTART</button>
+      <button class="quick" id="btn-crank" title="Replay the synthesized engine start">RESTART</button>
     </div>
-    <p class="hint">For overrun pops: rev high, then LIFT OFF (or release the
+    <p class="hint">Hold FULL for full throttle. For overrun pops: rev high, then LIFT OFF (or release the
     speed slider in Drive mode) — closed throttle at revs fires unburnt
-    mixture in the exhaust. 🔑 RESTART replays the synthesized engine start
+    mixture in the exhaust. RESTART replays the synthesized engine start
     (tune it under Starter &amp; ignition).</p>
   </section>
 
@@ -78,13 +79,14 @@
       <button class="quick" id="btn-preset-load">LOAD PRESET</button>
     </div>
   </section>
+  </aside>
 
   <!-- Parameter groups are generated from js/physical-params.js -->
   <section id="tuner-params"></section>
 
   <!-- Preset I/O -->
   <section id="preset-io">
-    <h3>Preset</h3>
+    <h3>Preset JSON</h3>
     <div class="quick-buttons">
       <button class="quick" id="btn-preset-export">EXPORT JSON</button>
       <button class="quick" id="btn-preset-apply">APPLY JSON</button>
@@ -94,10 +96,10 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=33"></script>
-<script src="js/physical-params.js?v=33"></script>
-<script src="js/engine-presets.js?v=33"></script>
-<script src="js/physical.js?v=33"></script>
-<script src="js/tuner.js?v=33"></script>
+<script src="js/engine.js?v=35"></script>
+<script src="js/physical-params.js?v=35"></script>
+<script src="js/engine-presets.js?v=35"></script>
+<script src="js/physical.js?v=35"></script>
+<script src="js/tuner.js?v=35"></script>
 </body>
 </html>
