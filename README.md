@@ -146,7 +146,8 @@ user gesture before audio can play).
     `localStorage` and used by the simulator. Defaults model a
     cross-plane V8.
   - **Engine presets** ([`js/engine-presets.js`](js/engine-presets.js),
-    ⚙ Settings → Engine preset, also loadable in the tuner): one pick sets
+    the ENGINE picker at the top of the main screen, also loadable in the
+    tuner): one pick sets
     the whole car — the physical sound model _and_ the drivetrain (rev
     range, idle, gears, shift points and shift speed, top speed, rev
     response). Street: VW Golf TDI (I4 diesel), Golf GTI (I4 turbo),
@@ -157,9 +158,9 @@ user gesture before audio can play).
     (rotary). Racing: Formula 1 V10 (2005, 19,000 rpm) and F1 V6 turbo
     hybrid (2014+). Real-world figures for the drivetrain; the acoustic
     values are tuned by ear to evoke each engine. Tweaking anything
-    afterwards marks the preset as modified, with a one-tap restore.
-  - **Listening position** (Settings, or the 🎧 button in the bottom bar
-    to cycle): _Original_ (the raw model, next to the engine), _Inside_
+    afterwards marks the preset as modified, with a one-tap ↺ restore.
+  - **Listening position** (⚙ Settings → Sound; defaults to _Inside_):
+    _Original_ (the raw model, next to the engine), _Inside_
     (driver's seat: bodywork lowpass, cabin bass boom, firewall intake
     noise, muffled tailpipe, a small damped room) and _Outside_ (a few
     metres away: tailpipe-dominated, brighter bark, ground and street
@@ -192,8 +193,8 @@ user gesture before audio can play).
 | Speed source                   | Manual slider / Pedals / GPS                |
 | Units                          | km/h / mph                                  |
 | Speed smoothing                | 0.05 – 1.5 s (lower = snappier vs GPS)      |
-| Engine preset                  | 13 engines, street cars to Formula 1        |
-| Listening position             | Original / Inside the car / Outside         |
+| Engine preset (main screen)    | 13 engines, street cars to Formula 1        |
+| Listening position             | Inside the car (default) / Original / Outside |
 | Engine sound                   | Physical model / Synthesized / sample packs |
 | Max RPM                        | 4,000 – 20,000                              |
 | Idle RPM                       | 500 – 5,000                                 |

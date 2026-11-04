@@ -35,15 +35,16 @@
   }
   const engine = new EngineSim(benchConfig());
   engine.setNeutral(true);
-  sound.setListener(Presets.readSettings().listener || 'original');
+  sound.setListener(Presets.readSettings().listener || 'cabin');
 
   function syncBenchToSettings() {
     engine.configure(benchConfig());
     const sp = $('bench-speed');
     sp.max = String(Math.round(engine.cfg.maxSpeed));
     const st = Presets.readSettings();
-    sound.setListener(st.listener || 'original');
-    $('bench-listener').value = PP.listener(st.listener).id;
+    const lis = PP.listener(st.listener || 'cabin').id;
+    sound.setListener(lis);
+    $('bench-listener').value = lis;
   }
 
   // ---------- Parameter UI (generated from the schema) ----------

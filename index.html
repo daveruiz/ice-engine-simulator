@@ -23,7 +23,7 @@
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
   <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-  <link rel="stylesheet" href="css/style.css?v=33" />
+  <link rel="stylesheet" href="css/style.css?v=34" />
 </head>
 
 <body>
@@ -40,6 +40,14 @@
   </div>
 
   <main id="app" class="hidden">
+
+    <!-- Engine preset picker (js/engine-presets.js) -->
+    <header id="top-bar">
+      <label for="top-preset">ENGINE</label>
+      <select id="top-preset" aria-label="Engine preset"></select>
+      <button id="btn-preset-restore" class="hidden" title="Restore the preset (undo your tweaks)"
+        aria-label="Restore preset">↺</button>
+    </header>
 
     <!-- Dashboard -->
     <section id="dashboard">
@@ -110,7 +118,6 @@
     <!-- Bottom bar -->
     <nav id="bottom-bar">
       <button id="btn-engine-toggle" class="bar-btn">■ STOP ENGINE</button>
-      <button id="btn-listener" class="bar-btn" title="Listening position (tap to cycle)">🎧 ORIGINAL</button>
       <button id="btn-settings" class="bar-btn">⚙ SETTINGS</button>
     </nav>
   </main>
@@ -122,24 +129,6 @@
         <h2>Settings</h2>
         <button id="btn-settings-close" class="bar-btn">✕ CLOSE</button>
       </header>
-
-      <!-- Quick sound: whole-engine presets + where you hear it from -->
-      <h3>Engine preset</h3>
-      <div class="setting-row">
-        <label for="set-preset">Engine</label>
-        <select id="set-preset"></select>
-        <p class="hint" id="preset-hint"></p>
-        <button id="btn-preset-restore" class="bar-btn hidden">↺ RESTORE PRESET</button>
-      </div>
-      <div class="setting-row" id="row-listener">
-        <label>Listening position</label>
-        <div class="seg" id="listener-seg" role="group" aria-label="Listening position">
-          <button class="seg-btn" data-listener="original">ORIGINAL</button>
-          <button class="seg-btn" data-listener="cabin">INSIDE</button>
-          <button class="seg-btn" data-listener="outside">OUTSIDE</button>
-        </div>
-        <p class="hint" id="listener-hint"></p>
-      </div>
 
       <h3>Speed source</h3>
       <div class="setting-row">
@@ -218,6 +207,15 @@
         <label for="set-cylinders">Cylinders <output id="out-cylinders"></output></label>
         <input type="range" id="set-cylinders" min="2" max="12" step="1">
       </div>
+      <div class="setting-row" id="row-listener">
+        <label>Listening position</label>
+        <div class="seg" id="listener-seg" role="group" aria-label="Listening position">
+          <button class="seg-btn" data-listener="original">ORIGINAL</button>
+          <button class="seg-btn" data-listener="cabin">INSIDE</button>
+          <button class="seg-btn" data-listener="outside">OUTSIDE</button>
+        </div>
+        <p class="hint" id="listener-hint"></p>
+      </div>
       <div class="setting-row" id="row-tuner">
         <a class="bar-btn link-btn" href="tuner.html">⚙ PHYSICAL ENGINE TUNER</a>
       </div>
@@ -252,14 +250,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=33"></script>
-  <script src="js/sound.js?v=33"></script>
-  <script src="js/samples.js?v=33"></script>
-  <script src="js/physical-params.js?v=33"></script>
-  <script src="js/engine-presets.js?v=33"></script>
-  <script src="js/physical.js?v=33"></script>
-  <script src="js/dashboard.js?v=33"></script>
-  <script src="js/main.js?v=33"></script>
+  <script src="js/engine.js?v=34"></script>
+  <script src="js/sound.js?v=34"></script>
+  <script src="js/samples.js?v=34"></script>
+  <script src="js/physical-params.js?v=34"></script>
+  <script src="js/engine-presets.js?v=34"></script>
+  <script src="js/physical.js?v=34"></script>
+  <script src="js/dashboard.js?v=34"></script>
+  <script src="js/main.js?v=34"></script>
 </body>
 
 </html>

@@ -347,7 +347,6 @@ html, body {
 .bar-btn:active { background: var(--panel-2); }
 .bar-btn.danger { border-color: var(--redline); color: var(--redline); }
 .bar-btn.hidden { display: none; }
-#bottom-bar .bar-btn { padding: 14px 6px; letter-spacing: 0.08em; }
 
 /* Segmented control (listening position) */
 .seg { display: flex; gap: 6px; }
@@ -367,7 +366,55 @@ html, body {
   color: var(--text);
   background: var(--panel-2);
 }
-#preset-hint, #listener-hint { margin-top: 0; }
+#listener-hint { margin-top: 0; }
+
+/* ---------- Top bar: engine preset picker ---------- */
+#top-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 1.2vh 4vw 0;
+  min-width: 0;
+}
+#top-bar label {
+  color: var(--accent-2);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  flex: 0 0 auto;
+}
+#top-preset {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 36px 10px 14px;
+  font-size: clamp(0.85rem, 2.6vw, 1rem);
+  letter-spacing: 0.03em;
+  color: var(--text);
+  background: var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%232fd0ff' stroke-width='2'/%3E%3C/svg%3E")
+    no-repeat right 14px center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  -webkit-appearance: none;
+  appearance: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+#top-preset:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+#top-preset option, #top-preset optgroup { background: var(--panel); color: var(--text); }
+#btn-preset-restore {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
 
 /* ---------- Settings panel ---------- */
 #settings-panel {
@@ -597,4 +644,11 @@ body.tuner-page {
   .start-card .hint { font-size: 0.72rem; margin-top: 16px; }
   .start-card .hint.car-hint { margin-top: 10px; }
   #btn-start { font-size: clamp(1rem, 5vw, 1.2rem); padding: 14px 32px; }
+}
+
+/* Short landscape screens (phones on their side): keep the picker slim */
+@media (max-height: 500px) {
+  #top-bar { padding-top: 4px; gap: 8px; }
+  #top-preset { padding: 6px 32px 6px 10px; font-size: 0.8rem; }
+  #btn-preset-restore { width: 30px; height: 30px; font-size: 1rem; }
 }
