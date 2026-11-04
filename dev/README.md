@@ -65,4 +65,14 @@ combination and prints RMS level, peak and the share of energy below
 node render-presets.js                          # all → dev/renders/
 node render-presets.js --preset f1-v10 --listener cabin --out /tmp/r
 node render-presets.js --seconds 12
+node render-presets.js --scenario sweep --preset golf-gti   # slow rev-up + lift-off pops
+node render-presets.js --scenario cruise                    # steady 3,000 rpm (tone purity)
+node render-presets.js --scenario start                     # key-on → crank → idle → key-off
+node render-presets.js --preset golf-gti --set exhaustFb=0,turbo=0 --tag test  # overrides
+node render-presets.js --comp 1                             # mix compressor amount 0..1
 ```
+
+The compressor's make-up table in `js/physical.js` (`MAKEUP_DB`) was
+calibrated with the `sweep` scenario at amounts 0, .25, .5, .75 and 1 so
+the engine's loudness barely moves with the slider — re-measure it if the
+FX chain or the compressor mapping changes.

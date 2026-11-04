@@ -42,6 +42,7 @@
     const sp = $('bench-speed');
     sp.max = String(Math.round(engine.cfg.maxSpeed));
     const st = Presets.readSettings();
+    sound.setCompression((st.compressor ?? 50) / 100);
     const lis = PP.listener(st.listener || 'cabin').id;
     sound.setListener(lis);
     $('bench-listener').value = lis;

@@ -28,7 +28,7 @@
      index.html and assets (GitHub Pages caches for 10 minutes) -->
   <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/style.css?v=35" />
+  <link rel="stylesheet" href="css/style.css?v=36" />
 </head>
 
 <body>
@@ -171,6 +171,12 @@
         <label for="set-volume">Volume <output id="out-volume"></output></label>
         <input type="range" id="set-volume" min="0" max="100" step="1">
       </div>
+      <div class="setting-row" id="row-compressor">
+        <label for="set-compressor">Compressor <output id="out-compressor"></output></label>
+        <input type="range" id="set-compressor" min="0" max="100" step="5">
+        <p class="hint">Evens out the engine's level and makes it denser. Overrun bangs skip
+        it, so with more compression they jump out of the mix even harder.</p>
+      </div>
       <div class="setting-row" id="row-startsound">
         <label for="set-startsound">Start sound</label>
         <select id="set-startsound">
@@ -266,14 +272,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=35"></script>
-  <script src="js/sound.js?v=35"></script>
-  <script src="js/samples.js?v=35"></script>
-  <script src="js/physical-params.js?v=35"></script>
-  <script src="js/engine-presets.js?v=35"></script>
-  <script src="js/physical.js?v=35"></script>
-  <script src="js/dashboard.js?v=35"></script>
-  <script src="js/main.js?v=35"></script>
+  <script src="js/engine.js?v=36"></script>
+  <script src="js/sound.js?v=36"></script>
+  <script src="js/samples.js?v=36"></script>
+  <script src="js/physical-params.js?v=36"></script>
+  <script src="js/engine-presets.js?v=36"></script>
+  <script src="js/physical.js?v=36"></script>
+  <script src="js/dashboard.js?v=36"></script>
+  <script src="js/main.js?v=36"></script>
 </body>
 
 </html>

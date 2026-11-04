@@ -18,6 +18,12 @@
  * relative parameter modifiers plus an acoustic-space stage (transmission
  * lowpass, cabin boom, generated impulse response) after the FX bus.
  */
+// Make-up gain (dB) per compression amount 0, .25, .5, .75, 1 — measured
+// with dev/render-presets.js so the engine's loudness barely moves with the
+// slider (it gets ~1 dB denser at full). Not monotonic because the native
+// compressor applies its own partial auto make-up.
+const MAKEUP_DB = [0.9, -1.3, -1.65, 0.4, 3.15];
+
 class PhysicalEngineSound {
   constructor() {
     this.ctx = null;
@@ -28,6 +34,7 @@ class PhysicalEngineSound {
     // i.e. baseParams with the listening-position modifiers applied.
     this.listener = 'original';
     this.starterLevel = 1;
+    this.compression = 0.5; // mix compressor amount 0..1 (Settings)
     this.baseParams = window.PhysicalParams.load();
     this.params = this._effective();
     window.addEventListener('storage', (e) => {
@@ -59,29 +66,47 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=19');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=20');
     this.ctx = ctx;
 
+    // Output 0: the engine. Output 1: overrun tailpipe bangs.
     this.node = new AudioWorkletNode(ctx, 'physical-engine', {
       numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [1],
+      numberOfOutputs: 2,
+      outputChannelCount: [1, 1],
       processorOptions: { params: this.params },
     });
 
     this.master = ctx.createGain();
     this.master.gain.value = 0;
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18;
-    comp.knee.value = 20;
-    comp.ratio.value = 8;
-    comp.attack.value = 0.003;
-    comp.release.value = 0.15;
+    // Mix (bus) compressor on the engine: evens out the level and makes it
+    // denser; amount from Settings. The bangs skip it on purpose.
+    this.busComp = ctx.createDynamicsCompressor();
+    this.busMakeup = ctx.createGain();
+    this.busComp.connect(this.busMakeup);
     this.fxOut = ctx.createGain();
-    this._buildFx(ctx, this.node, this.fxOut);
+    this.busMakeup.connect(this.fxOut);
+    this._buildFx(ctx, this.node, this.busComp);
+    // Bang layer: driven hard into saturation, then straight into the
+    // acoustic space (so cabin/outside still filter it) — past the bus
+    // compressor, so it punches out of the mix
+    this.bangShaper = ctx.createWaveShaper();
+    this.bangShaper.oversample = '4x';
+    this.node.connect(this.bangShaper, 1, 0);
+    this.bangShaper.connect(this.fxOut);
+    this._bangDrive = 0;
     this._buildSpace(ctx, this.fxOut, this.master);
-    this.master.connect(comp);
-    comp.connect(opts.destination || ctx.destination);
+    // Final safety limiter: only catches peaks (bangs, flares)
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.12;
+    this.master.connect(limiter);
+    limiter.connect(opts.destination || ctx.destination);
+    this._applyComp(true);
+    this._applyFx();
     // Master is left silent; main.js fades it in (see fadeIn) so the
     // starter clip can crank first and the engine swell in as it catches.
     this.running = true;
@@ -149,6 +174,40 @@ class PhysicalEngineSound {
     }
     this.satDry.gain.setTargetAtTime(1 - p.satMix, t, S);
     this.satWet.gain.setTargetAtTime(p.satMix, t, S);
+    if (this.bangShaper && this._bangDrive !== p.bangDrive) {
+      this._bangDrive = p.bangDrive;
+      this.bangShaper.curve = PhysicalEngineSound._satCurve(p.bangDrive || 5);
+    }
+  }
+
+  /**
+   * Mix compressor amount (0 = off … 1 = heavy). Lower threshold and a
+   * higher ratio as it goes up; attack stays slow enough to keep the
+   * combustion transients, and make-up gain restores the level.
+   */
+  setCompression(a) {
+    this.compression = Math.max(0, Math.min(1, a));
+    this._applyComp(false);
+  }
+
+  _applyComp(instant) {
+    if (!this.ctx || !this.busComp) return;
+    const a = this.compression, c = this.busComp, t = this.ctx.currentTime;
+    const S = instant ? 0.001 : 0.05;
+    c.threshold.setTargetAtTime(-2 - 34 * a, t, S);
+    c.ratio.setTargetAtTime(1 + 11 * a, t, S);
+    c.knee.setTargetAtTime(10, t, S);
+    c.attack.setTargetAtTime(0.025 - 0.017 * a, t, S);
+    c.release.setTargetAtTime(0.25 - 0.12 * a, t, S);
+    this.busMakeup.gain.setTargetAtTime(PhysicalEngineSound.makeup(a), t, S);
+  }
+
+  /** Make-up gain for compression amount a (calibrated, see dev/). */
+  static makeup(a) {
+    const x = Math.max(0, Math.min(1, a)) * (MAKEUP_DB.length - 1);
+    const i = Math.min(MAKEUP_DB.length - 2, Math.floor(x));
+    const db = MAKEUP_DB[i] + (MAKEUP_DB[i + 1] - MAKEUP_DB[i]) * (x - i);
+    return Math.pow(10, db / 20);
   }
 
   /**
@@ -196,6 +255,8 @@ class PhysicalEngineSound {
     this.spBoom.frequency.setTargetAtTime(sp ? sp.boomFreq : 68, t, S);
     this.spBoom.Q.setTargetAtTime(sp ? sp.boomQ : 1, t, S);
     this.spBoom.gain.setTargetAtTime(sp ? sp.boomGain : 0, t, S);
+    const g = sp && sp.gain !== undefined ? sp.gain : 1;
+    this.spDry.gain.setTargetAtTime(g, t, S);
     for (const id of Object.keys(this.spaces)) {
       const s = this.spaces[id];
       const active = id === L.id;
@@ -204,7 +265,7 @@ class PhysicalEngineSound {
         this.spBoom.connect(s.conv);
         s.connected = true;
       }
-      s.wet.gain.setTargetAtTime(active ? sp.mix : 0, t, S);
+      s.wet.gain.setTargetAtTime(active ? sp.mix * g : 0, t, S);
       if (!active && s.connected) {
         // Let the tail fade out before unplugging the idle convolver
         s.timer = setTimeout(() => {

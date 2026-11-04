@@ -56,6 +56,12 @@ window.PhysicalParams = (function () {
     { key: 'idleLevel', group: 'engine', label: 'Closed-throttle combustion',
       min: 0.02, max: 0.6, step: 0.01, def: 0.22,
       info: 'Combustion amplitude at zero load (idle). Full load is always 1.' },
+    { key: 'cylImbalance', group: 'engine', label: 'Cylinder imbalance',
+      min: 0, max: 0.3, step: 0.005, def: 0.1,
+      info: 'Each cylinder burns a little differently (strength and timing, fixed per start). Adds the half-order texture of a real engine; 0 = machine-perfect, glassy tone.' },
+    { key: 'phaseJitter', group: 'engine', label: 'Combustion timing jitter', unit: '°',
+      min: 0, max: 6, step: 0.1, def: 2.5,
+      info: 'Cycle-to-cycle scatter of when (and how fast) each combustion happens, in crank degrees. Breaks the perfectly periodic pulse train that sounds synthetic.' },
     { key: 'idleWobble', group: 'engine', label: 'Idle RPM wobble',
       min: 0, max: 0.06, step: 0.002, def: 0.02,
       info: 'Slow random crank-speed wobble at idle (dies out with revs/load).' },
@@ -99,6 +105,12 @@ window.PhysicalParams = (function () {
     { key: 'straightMix', group: 'exhaust', label: 'Straight-pipe mix',
       min: 0, max: 1, step: 0.01, def: 0.30,
       info: 'Blend of unmuffled tailpipe sound. 0 = fully muffled, 1 = straight pipes.' },
+    { key: 'gasTemp', group: 'exhaust', label: 'Gas temperature effect',
+      min: 0, max: 0.25, step: 0.005, def: 0.08,
+      info: 'Hot exhaust gas carries sound faster, so pipe resonances rise as the gas heats up under load (and fall slowly as it cools). Keeps the resonances from sitting still.' },
+    { key: 'turbulence', group: 'exhaust', label: 'Flow turbulence',
+      min: 0, max: 0.02, step: 0.0005, def: 0.006,
+      info: 'Small random wander of the pipe tuning from turbulent flow, mostly under load. Smears the comb-filter "beading" as revs sweep.' },
     { key: 'exhaustGain', group: 'exhaust', label: 'Exhaust level',
       min: 0, max: 2, step: 0.01, def: 1.0,
       info: 'Overall exhaust loudness in the mix.' },
@@ -155,7 +167,16 @@ window.PhysicalParams = (function () {
       info: 'Chance that a cylinder cycle on overrun (closed throttle, revs up) ignites unburnt mixture in the exhaust. 0 disables pops.' },
     { key: 'popGain', group: 'pops', label: 'Pop intensity',
       min: 1, max: 6, step: 0.1, def: 3.0,
-      info: 'How much louder a pop is than a normal closed-throttle pulse.' },
+      info: 'How much louder a pop is than a normal closed-throttle pulse (the muffled part, through the exhaust).' },
+    { key: 'bangLevel', group: 'pops', label: 'Tailpipe bang level',
+      min: 0, max: 2, step: 0.01, def: 1.0,
+      info: 'The unmuffled crack when the mixture ignites at the tailpipe. Mixed past the compressor so it punches through.' },
+    { key: 'bangDrive', group: 'pops', label: 'Bang saturation',
+      min: 1, max: 12, step: 0.1, def: 5,
+      info: 'How hard the bang is driven into saturation: higher = louder, dirtier, more aggressive.' },
+    { key: 'crackle', group: 'pops', label: 'After-crackle',
+      min: 0, max: 1, step: 0.01, def: 0.45,
+      info: 'Chance of smaller crackles following a bang (the burble of a sports exhaust).' },
 
     // ---- Output ----
     { key: 'drive', group: 'out', label: 'Drive / saturation',
@@ -259,6 +280,7 @@ window.PhysicalParams = (function () {
         hissGain: { mul: 0.4 },
         blowoffGain: { mul: 0.6 },
         popGain: { mul: 0.85 },
+        bangLevel: { mul: 0.6 },
         starterGain: { mul: 0.8 },
         solenoidGain: { mul: 0.7 },
         // Tone: bodywork transmission loss (highs) + cabin bass build-up
@@ -271,6 +293,7 @@ window.PhysicalParams = (function () {
         masterGain: { mul: 0.9 },
       },
       space: {
+        gain: 0.78,                      // post-compressor level (cabin bass boost)
         lowpass: 2600, lowpassQ: 0.8,   // panels/glass: steep high-frequency loss
         boomFreq: 68, boomGain: 6, boomQ: 1.1, // first cabin mode
         mix: 0.22,                       // small, damped room
@@ -295,6 +318,7 @@ window.PhysicalParams = (function () {
         hissGain: { mul: 0.6 },
         blowoffGain: { mul: 1.1 },
         popGain: { mul: 1.15 },
+        bangLevel: { mul: 1.3 },
         starterGain: { mul: 0.6 },
         solenoidGain: { mul: 0.6 },
         bassGain: { add: -3 },
