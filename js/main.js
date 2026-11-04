@@ -40,7 +40,8 @@
     startSound: "synth", // physical model: 'synth' (starter motor model) | 'sample' (recorded clip)
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
-    listener: "original", // physical model listening position: original|cabin|outside
+    listener: "cabin", // physical model listening position: original|cabin|outside
+    rev: 2, // settings revision (one-off migrations in loadSettings)
   };
 
   let settings = loadSettings();
@@ -100,8 +101,14 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const s = Object.assign({}, DEFAULTS, JSON.parse(raw));
+        const stored = JSON.parse(raw);
+        const s = Object.assign({}, DEFAULTS, stored);
         if (s.soundSet === "samples") s.soundSet = "auto"; // pre-library format
+        // rev 2: inside the cabin became the default listening position
+        if (!(stored.rev >= 2)) {
+          s.listener = "cabin";
+          s.rev = 2;
+        }
         return s;
       }
     } catch (e) {
@@ -196,12 +203,16 @@
   }
 
   function updatePresetUI() {
+    const sel = $("top-preset");
     const p = Presets.get(settings.preset);
-    $("set-preset").value = p ? p.id : "";
     const modified = !!p && presetModified();
-    $("preset-hint").textContent = p
-      ? (modified ? "Modified from this preset (engine settings or tuner). " : "") + p.desc
-      : "";
+    // The picked option reads "… · modified" after tweaks; ↺ restores it
+    for (const o of sel.options) {
+      const name = Presets.get(o.value).name;
+      o.textContent = o.value === settings.preset && modified ? name + " · modified" : name;
+    }
+    sel.value = p ? p.id : "";
+    sel.title = p ? p.desc : "";
     $("btn-preset-restore").classList.toggle("hidden", !modified);
   }
 
@@ -218,7 +229,6 @@
       b.classList.toggle("active", b.dataset.listener === L.id);
     });
     $("listener-hint").textContent = L.desc;
-    $("btn-listener").textContent = "🎧 " + L.short;
   }
 
   // Show each control only where it applies: Cylinders shapes the built-in
@@ -232,7 +242,6 @@
     $("row-tuner").classList.toggle("hidden", settings.soundSet !== "physical");
     // Listening positions are part of the physical model
     $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
-    $("btn-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
@@ -293,7 +302,7 @@
       next = physicalSound;
       note =
         "Physically modeled engine (cylinders, waveguides, muffler…). " +
-        "Pick an engine under Engine preset at the top, or shape it in the " +
+        "Pick an engine with the ENGINE picker on the main screen, or shape it in the " +
         '<a href="tuner.html">engine tuner</a>.';
     } else if (entry) {
       const eng = await ensurePackEngine(entry);
@@ -652,19 +661,16 @@
       settings.soundSet = e.target.value;
       applySettings();
     });
-    Presets.fillSelect($("set-preset"));
-    $("set-preset").addEventListener("change", (e) => applyPreset(e.target.value));
+    Presets.fillSelect($("top-preset"));
+    $("top-preset").addEventListener("change", (e) => {
+      applyPreset(e.target.value);
+      e.target.blur();
+    });
     $("btn-preset-restore").addEventListener("click", () =>
       applyPreset(settings.preset),
     );
     document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
       b.addEventListener("click", () => setListener(b.dataset.listener));
-    });
-    // Bottom-bar quick toggle: cycle original → cabin → outside
-    $("btn-listener").addEventListener("click", () => {
-      const ids = PP.LISTENERS.map((l) => l.id);
-      const i = ids.indexOf(PP.listener(settings.listener).id);
-      setListener(ids[(i + 1) % ids.length]);
     });
     $("btn-reset-defaults").addEventListener("click", () => {
       settings = Object.assign({}, DEFAULTS);
