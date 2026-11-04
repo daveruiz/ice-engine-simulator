@@ -191,6 +191,9 @@ user gesture before audio can play).
   landscape and the car screen show the dials side by side, sized to the
   available height. One button/control family, self-hosted Barlow typefaces
   ([`fonts/`](fonts/)), and the engine picker at the top of the screen.
+  The app icon ([`icons/`](icons/): a dial whose orange needle drives the
+  sound waves below it) and a web manifest let you add it to a phone's home
+  screen like an app.
 
 ## Configurable (⚙ Settings)
 
