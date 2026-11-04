@@ -125,9 +125,9 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.cyclePop = new Uint8Array(MAX_CYL);
     this.wobble = 0; this.wobbleT = 0;
 
-    // Waveguides (sized for ≤6 m pipe at 96 kHz)
-    this.runL = new Pipe(2048);
-    this.runR = new Pipe(2048);
+    // Waveguides (sized for ≤6 m pipe / ≤3.75 m runner at 96 kHz)
+    this.runL = new Pipe(4096);
+    this.runR = new Pipe(4096);
     this.exPipe = new Pipe(4096);
     this.inPipe = new Pipe(2048);
 
@@ -171,13 +171,19 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       // Firing order 1-8-4-3-6-5-7-2, cylinders 1/3/5/7 on the left bank:
       const s = 'LRRLRLLR';
       for (let i = 0; i < 8; i++) this.bank[i] = s[i] === 'R' ? 1 : 0;
+    } else if (P.firingPattern === 'paired') {
+      // Boxer-4 firing 1-3-2-4 with 1/3 on one side: banks go R R L L
+      for (let i = 0; i < this.N; i++) this.bank[i] = (i >> 1) & 1 ? 0 : 1;
     } else if (P.firingPattern !== 'single') {
       for (let i = 0; i < this.N; i++) this.bank[i] = i & 1;
     }
 
     this.runL.set(D(P.runnerLength), P.runnerFb, lpCoef(3200, sr));
-    // Slightly unequal runner lengths, like a real manifold
-    this.runR.set(D(P.runnerLength * 1.07), P.runnerFb, lpCoef(3200, sr));
+    // Unequal runner lengths: slightly by default (like a real manifold),
+    // strongly for unequal-length headers (pulses reach the collector
+    // out of step — the boxer rumble)
+    const imb = P.runnerImbalance !== undefined ? P.runnerImbalance : 1.07;
+    this.runR.set(D(P.runnerLength * imb), P.runnerFb, lpCoef(3200, sr));
     this.exPipe.set(D(P.exhaustLength), P.exhaustFb, lpCoef(P.exhaustLp, sr));
     this.inPipe.set(D(P.intakeLength), P.intakeFb, lpCoef(2500, sr));
 

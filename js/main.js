@@ -7,7 +7,9 @@
 
   const KMH_PER_MS = 3.6;
   const MPH_PER_KMH = 0.621371;
-  const STORAGE_KEY = "ice-simulator-settings-v1";
+  const STORAGE_KEY = window.EnginePresets.SETTINGS_KEY;
+  const Presets = window.EnginePresets;
+  const PP = window.PhysicalParams;
 
   // GPS noise rejection. A phone standing still doesn't report a clean 0:
   // its fix wanders several metres between samples (and browsers that don't
@@ -28,6 +30,7 @@
     gears: 6,
     shiftUpRpm: 6200,
     shiftDownRpm: 1800,
+    shiftTime: 0.3, // s of torque cut per gear change
     maxSpeed: 250, // always stored in km/h
     revUpTime: 0.55, // neutral rev-up time constant (s)
     revDownTime: 0.85, // neutral rev-down time constant (s)
@@ -35,6 +38,8 @@
     volume: 70,
     startVolume: 150, // ignition clip level, % relative to master volume
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
+    preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
+    listener: "original", // physical model listening position: original|cabin|outside
   };
 
   let settings = loadSettings();
@@ -75,7 +80,7 @@
 
   const tacho = new Gauge($("tacho"), {
     max: settings.maxRpm,
-    majorStep: 1000,
+    majorStep: rpmStep(settings),
     redFrom: redlineFor(settings),
     minorPerMajor: 5,
     tickLabel: (v) => Math.round(v / 1000),
@@ -119,6 +124,7 @@
       gears: settings.gears,
       shiftUpRpm: Math.min(settings.shiftUpRpm, settings.maxRpm - 200),
       shiftDownRpm: settings.shiftDownRpm,
+      shiftTime: settings.shiftTime,
       revUpTime: settings.revUpTime,
       revDownTime: settings.revDownTime,
       speedSmoothing: settings.speedSmoothing,
@@ -127,6 +133,11 @@
 
   function redlineFor(s) {
     return Math.max(s.shiftUpRpm, s.maxRpm - 1000);
+  }
+
+  // Tacho label spacing: race engines (up to ~20k rpm) get 2k steps.
+  function rpmStep(s) {
+    return s.maxRpm > 12000 ? 2000 : 1000;
   }
 
   // ---------- Units ----------
@@ -145,16 +156,66 @@
 
   function applySettings() {
     engine.configure(engineConfig());
-    tacho.setRange(settings.maxRpm, 1000, redlineFor(settings));
+    tacho.setRange(settings.maxRpm, rpmStep(settings), redlineFor(settings));
     speedo.setRange(displaySpeed(settings.maxSpeed), speedoStep(), Infinity);
     el.slider.max = String(Math.round(settings.maxSpeed));
     el.roSpeedUnit.textContent = unitLabel();
     el.speedUnitLabel.textContent = unitLabel();
     sound.setVolume(settings.volume / 100);
+    physicalSound.setListener(settings.listener);
     setSource(settings.source);
     setActiveSound();
     updateSettingsVisibility();
+    updatePresetUI();
+    updateListenerUI();
     saveSettings();
+  }
+
+  // ---------- Engine presets & listening position ----------
+  /**
+   * Turn the car into preset `id`: drivetrain settings + the physical
+   * sound model (saved where the tuner reads it), and switch the sound
+   * engine to the physical model, which is what presets describe.
+   */
+  function applyPreset(id) {
+    const p = Presets.get(id);
+    if (!p) return;
+    Object.assign(settings, p.engine, { preset: id, soundSet: "physical" });
+    const params = Presets.physicalParams(id);
+    PP.save(params);
+    physicalSound.setParams(params);
+    syncSettingsUI();
+    applySettings();
+  }
+
+  function presetModified() {
+    return !Presets.matches(settings.preset, settings, PP.load());
+  }
+
+  function updatePresetUI() {
+    const p = Presets.get(settings.preset);
+    $("set-preset").value = p ? p.id : "";
+    const modified = !!p && presetModified();
+    $("preset-hint").textContent = p
+      ? (modified ? "Modified from this preset (engine settings or tuner). " : "") + p.desc
+      : "";
+    $("btn-preset-restore").classList.toggle("hidden", !modified);
+  }
+
+  function setListener(id) {
+    settings.listener = PP.listener(id).id;
+    physicalSound.setListener(settings.listener);
+    updateListenerUI();
+    saveSettings();
+  }
+
+  function updateListenerUI() {
+    const L = PP.listener(settings.listener);
+    document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.listener === L.id);
+    });
+    $("listener-hint").textContent = L.desc;
+    $("btn-listener").textContent = "🎧 " + L.short;
   }
 
   // Show each control only where it applies: Cylinders shapes the built-in
@@ -166,6 +227,9 @@
       settings.soundSet !== "synth",
     );
     $("row-tuner").classList.toggle("hidden", settings.soundSet !== "physical");
+    // Listening positions are part of the physical model
+    $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("btn-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
@@ -225,8 +289,8 @@
       next = physicalSound;
       note =
         "Physically modeled engine (cylinders, waveguides, muffler…). " +
-        'Shape it in the <a href="tuner.html">engine tuner</a> — ' +
-        "the cylinder count lives there, not in the slider above.";
+        "Pick an engine under Engine preset at the top, or shape it in the " +
+        '<a href="tuner.html">engine tuner</a>.';
     } else if (entry) {
       const eng = await ensurePackEngine(entry);
       if (token !== soundSwapToken) return; // superseded by a newer choice
@@ -262,7 +326,7 @@
     }
     const op = document.createElement("option");
     op.value = "physical";
-    op.textContent = "Physical model (V8 preset)";
+    op.textContent = "Physical model (engine preset)";
     sel.appendChild(op);
     const o = document.createElement("option");
     o.value = "synth";
@@ -528,6 +592,7 @@
     ["set-gears", "out-gears", "gears", (v) => v],
     ["set-shiftup", "out-shiftup", "shiftUpRpm", (v) => v],
     ["set-shiftdown", "out-shiftdown", "shiftDownRpm", (v) => v],
+    ["set-shifttime", "out-shifttime", "shiftTime", (v) => v.toFixed(2) + "s"],
     ["set-maxspeed", "out-maxspeed", "maxSpeed", (v) => v],
     ["set-speedsmooth", "out-speedsmooth", "speedSmoothing", (v) => v.toFixed(2) + "s"],
     ["set-revup", "out-revup", "revUpTime", (v) => v.toFixed(2) + "s"],
@@ -578,10 +643,23 @@
       settings.soundSet = e.target.value;
       applySettings();
     });
+    Presets.fillSelect($("set-preset"));
+    $("set-preset").addEventListener("change", (e) => applyPreset(e.target.value));
+    $("btn-preset-restore").addEventListener("click", () =>
+      applyPreset(settings.preset),
+    );
+    document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
+      b.addEventListener("click", () => setListener(b.dataset.listener));
+    });
+    // Bottom-bar quick toggle: cycle original → cabin → outside
+    $("btn-listener").addEventListener("click", () => {
+      const ids = PP.LISTENERS.map((l) => l.id);
+      const i = ids.indexOf(PP.listener(settings.listener).id);
+      setListener(ids[(i + 1) % ids.length]);
+    });
     $("btn-reset-defaults").addEventListener("click", () => {
       settings = Object.assign({}, DEFAULTS);
-      syncSettingsUI();
-      applySettings();
+      applyPreset(Presets.DEFAULT_ID); // also resets the physical model
     });
     $("btn-settings").addEventListener("click", () =>
       el.settingsPanel.classList.remove("hidden"),
@@ -646,7 +724,15 @@
       limiter.ratio.value = 20;
       limiter.attack.value = 0.002;
       limiter.release.value = 0.12;
-      src.connect(g);
+      // Heard from inside the car, the starter is muffled like the engine
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value =
+        settings.soundSet === "physical" && settings.listener === "cabin"
+          ? 2500
+          : Math.min(20000, ctx.sampleRate * 0.45);
+      src.connect(lp);
+      lp.connect(g);
       g.connect(limiter);
       limiter.connect(ctx.destination);
       src.start();
@@ -863,6 +949,19 @@
       sound.ctx.state === "suspended"
     ) {
       sound.ctx.resume();
+    }
+  });
+
+  // The tuner can load presets / move the listener from another tab:
+  // follow its writes to our settings, and refresh the "modified" hint
+  // when it changes the physical parameters.
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY) {
+      settings = loadSettings();
+      syncSettingsUI();
+      applySettings();
+    } else if (e.key === PP.STORAGE_KEY) {
+      updatePresetUI();
     }
   });
 

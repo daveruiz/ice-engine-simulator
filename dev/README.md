@@ -1,6 +1,7 @@
 # Dev tools
 
-Utilities for preparing engine sample packs. **Not part of the app** —
+Utilities for preparing engine sample packs and checking the physical
+engine presets. **Not part of the app** —
 nothing here is loaded by the site; it's for development only.
 
 Both scripts drive a headless Chromium (via `playwright-core`) because the
@@ -50,3 +51,18 @@ node extract-loop.js quiet-idle.ogg idle.wav --peak 0.7   # whole file, amplifie
 Choose cut points where the pitch track (from analyze-pitch.js) starts and
 ends at the same value — the app crossfades the loop seam automatically,
 but a pitch jump across the seam is audible.
+
+## render-presets.js — render the physical presets offline
+
+Renders every engine preset (`js/engine-presets.js`) from every listening
+position through the real worklet + FX + acoustic-space chain in an
+`OfflineAudioContext`, along a fixed test drive (idle → two free-rev blips
+→ full-throttle pull through the gears → lift-off). Writes one WAV per
+combination and prints RMS level, peak and the share of energy below
+~150 Hz — useful to keep presets and positions balanced after tweaks.
+
+```bash
+node render-presets.js                          # all → dev/renders/
+node render-presets.js --preset f1-v10 --listener cabin --out /tmp/r
+node render-presets.js --seconds 12
+```

@@ -23,7 +23,7 @@
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
   <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-  <link rel="stylesheet" href="css/style.css?v=31" />
+  <link rel="stylesheet" href="css/style.css?v=32" />
 </head>
 
 <body>
@@ -110,6 +110,7 @@
     <!-- Bottom bar -->
     <nav id="bottom-bar">
       <button id="btn-engine-toggle" class="bar-btn">■ STOP ENGINE</button>
+      <button id="btn-listener" class="bar-btn" title="Listening position (tap to cycle)">🎧 ORIGINAL</button>
       <button id="btn-settings" class="bar-btn">⚙ SETTINGS</button>
     </nav>
   </main>
@@ -121,6 +122,24 @@
         <h2>Settings</h2>
         <button id="btn-settings-close" class="bar-btn">✕ CLOSE</button>
       </header>
+
+      <!-- Quick sound: whole-engine presets + where you hear it from -->
+      <h3>Engine preset</h3>
+      <div class="setting-row">
+        <label for="set-preset">Engine</label>
+        <select id="set-preset"></select>
+        <p class="hint" id="preset-hint"></p>
+        <button id="btn-preset-restore" class="bar-btn hidden">↺ RESTORE PRESET</button>
+      </div>
+      <div class="setting-row" id="row-listener">
+        <label>Listening position</label>
+        <div class="seg" id="listener-seg" role="group" aria-label="Listening position">
+          <button class="seg-btn" data-listener="original">ORIGINAL</button>
+          <button class="seg-btn" data-listener="cabin">INSIDE</button>
+          <button class="seg-btn" data-listener="outside">OUTSIDE</button>
+        </div>
+        <p class="hint" id="listener-hint"></p>
+      </div>
 
       <h3>Speed source</h3>
       <div class="setting-row">
@@ -148,11 +167,11 @@
       <h3>Engine</h3>
       <div class="setting-row">
         <label for="set-maxrpm">Max RPM <output id="out-maxrpm"></output></label>
-        <input type="range" id="set-maxrpm" min="4000" max="12000" step="500">
+        <input type="range" id="set-maxrpm" min="4000" max="20000" step="500">
       </div>
       <div class="setting-row">
         <label for="set-idlerpm">Idle RPM <output id="out-idlerpm"></output></label>
-        <input type="range" id="set-idlerpm" min="500" max="1500" step="50">
+        <input type="range" id="set-idlerpm" min="500" max="5000" step="50">
       </div>
       <div class="setting-row">
         <label for="set-revup">Neutral rev-up time <output id="out-revup"></output></label>
@@ -170,11 +189,15 @@
       </div>
       <div class="setting-row">
         <label for="set-shiftup">Shift up at RPM <output id="out-shiftup"></output></label>
-        <input type="range" id="set-shiftup" min="2000" max="11000" step="100">
+        <input type="range" id="set-shiftup" min="2000" max="19500" step="100">
       </div>
       <div class="setting-row">
         <label for="set-shiftdown">Shift down at RPM <output id="out-shiftdown"></output></label>
-        <input type="range" id="set-shiftdown" min="800" max="5000" step="100">
+        <input type="range" id="set-shiftdown" min="800" max="12000" step="100">
+      </div>
+      <div class="setting-row">
+        <label for="set-shifttime">Shift time <output id="out-shifttime"></output></label>
+        <input type="range" id="set-shifttime" min="0.03" max="0.6" step="0.01">
       </div>
 
       <h3>Vehicle</h3>
@@ -219,13 +242,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=31"></script>
-  <script src="js/sound.js?v=31"></script>
-  <script src="js/samples.js?v=31"></script>
-  <script src="js/physical-params.js?v=31"></script>
-  <script src="js/physical.js?v=31"></script>
-  <script src="js/dashboard.js?v=31"></script>
-  <script src="js/main.js?v=31"></script>
+  <script src="js/engine.js?v=32"></script>
+  <script src="js/sound.js?v=32"></script>
+  <script src="js/samples.js?v=32"></script>
+  <script src="js/physical-params.js?v=32"></script>
+  <script src="js/engine-presets.js?v=32"></script>
+  <script src="js/physical.js?v=32"></script>
+  <script src="js/dashboard.js?v=32"></script>
+  <script src="js/main.js?v=32"></script>
 </body>
 
 </html>

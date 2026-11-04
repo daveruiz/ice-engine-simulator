@@ -40,6 +40,7 @@ window.PhysicalParams = (function () {
         ['v8-crossplane', 'V8 cross-plane (uneven banks — burble)'],
         ['alternating', 'Alternating banks (flat-plane V)'],
         ['single', 'Single bank (inline engine)'],
+        ['paired', 'Paired banks (boxer-4: 1-3 / 2-4)'],
       ],
       info: 'Which exhaust manifold each cylinder fires into. A cross-plane V8 sends an irregular pulse train down each bank — that IS the V8 burble.' },
     { key: 'fireWidth', group: 'engine', label: 'Combustion pulse width', unit: 'cycle',
@@ -79,6 +80,9 @@ window.PhysicalParams = (function () {
     { key: 'runnerFb', group: 'exhaust', label: 'Header resonance',
       min: 0, max: 0.9, step: 0.01, def: 0.25,
       info: 'Reflections inside the headers. High values ring like open headers.' },
+    { key: 'runnerImbalance', group: 'exhaust', label: 'Header length imbalance', unit: '×',
+      min: 1.0, max: 2.5, step: 0.01, def: 1.07,
+      info: 'Length of the right-bank header relative to the left. 1 = equal-length headers; large values make pulses reach the collector out of step — the unequal-length boxer rumble.' },
     { key: 'exhaustLength', group: 'exhaust', label: 'Exhaust pipe length', unit: 'm',
       min: 0.5, max: 6.0, step: 0.05, def: 2.7,
       info: 'Main exhaust pipe waveguide length — the biggest factor in the exhaust note pitch/body.' },
@@ -188,6 +192,112 @@ window.PhysicalParams = (function () {
       info: 'Parallel blend: 0 = clean, 1 = fully saturated. Parallel keeps combustion transients punchy.' },
   ];
 
+  /**
+   * Listening positions: where the listener's ears are relative to the
+   * engine. Each one is a set of *relative* modifiers layered on top of
+   * whatever engine parameters are active (a preset or a tuned set), so
+   * the same position works for every engine automatically:
+   *
+   *   mods  — per-parameter { mul, add } applied to the engine params
+   *           (which sources reach the ear, how bright, how much bass);
+   *           results are clamped to the schema range.
+   *   space — the acoustic path after synthesis (native WebAudio nodes in
+   *           physical.js): a transmission lowpass, a low "boom"
+   *           resonance and a generated room/street impulse response.
+   *
+   * 'original' is the untouched model (as heard next to the engine).
+   */
+  const LISTENERS = [
+    {
+      id: 'original', name: 'Original', short: 'ORIGINAL',
+      desc: 'The raw engine model, as tuned — like standing right next to the engine.',
+      mods: {},
+      space: null,
+    },
+    {
+      id: 'cabin', name: 'Inside the car', short: 'CABIN',
+      desc: 'Driver’s seat: the body filters out the highs, the cabin booms ' +
+        'with the firing rumble, intake noise comes through the firewall and ' +
+        'the exhaust arrives muffled from behind.',
+      mods: {
+        // Sources: intake/firewall dominate, tailpipe and hiss are muffled
+        intakeGain: { mul: 1.25 },
+        straightMix: { mul: 0.5 },
+        mufflerCutoff: { mul: 0.8 },
+        mechGain: { mul: 0.7 },
+        res2Gain: { mul: 0.5 },
+        chainGain: { mul: 0.35 },
+        whineGain: { mul: 0.75 },
+        hissGain: { mul: 0.4 },
+        blowoffGain: { mul: 0.6 },
+        popGain: { mul: 0.85 },
+        // Tone: bodywork transmission loss (highs) + cabin bass build-up
+        masterLp: { mul: 0.5 },
+        bassFreq: { mul: 0.9 },
+        bassGain: { add: 4 },
+        midGain: { add: -1.5 },
+        trebleGain: { add: -6 },
+        satMix: { mul: 0.85 },
+        masterGain: { mul: 0.9 },
+      },
+      space: {
+        lowpass: 2600, lowpassQ: 0.8,   // panels/glass: steep high-frequency loss
+        boomFreq: 68, boomGain: 6, boomQ: 1.1, // first cabin mode
+        mix: 0.22,                       // small, damped room
+        ir: { decay: 0.14, predelay: 0.002, tone: 1800, width: 0.35,
+          early: [[0.0035, 0.5], [0.0062, 0.35], [0.0091, 0.25]] },
+      },
+    },
+    {
+      id: 'outside', name: 'Outside the car', short: 'OUTSIDE',
+      desc: 'Standing a few metres away: the tailpipe dominates with a rawer, ' +
+        'brighter bark, the engine bay is muted, and the sound bounces off ' +
+        'the ground and the street around you.',
+      mods: {
+        exhaustGain: { mul: 1.15 },
+        straightMix: { add: 0.15 },
+        mufflerCutoff: { mul: 1.25 },
+        intakeGain: { mul: 0.45 },
+        mechGain: { mul: 0.5 },
+        res1Gain: { mul: 0.8 },
+        chainGain: { mul: 0.4 },
+        whineGain: { mul: 0.5 },
+        hissGain: { mul: 0.6 },
+        blowoffGain: { mul: 1.1 },
+        popGain: { mul: 1.15 },
+        bassGain: { add: -3 },
+        trebleGain: { add: 1 },
+      },
+      space: {
+        lowpass: 9000, lowpassQ: 0.6,    // a little air absorption
+        boomFreq: 68, boomGain: 0, boomQ: 1,
+        mix: 0.28,                       // ground bounce + street reflections
+        ir: { decay: 0.75, predelay: 0.008, tone: 3200, width: 0.85,
+          early: [[0.008, 0.8], [0.021, 0.45], [0.034, 0.35], [0.052, 0.25]] },
+      },
+    },
+  ];
+
+  function listener(id) {
+    return LISTENERS.find((l) => l.id === id) || LISTENERS[0];
+  }
+
+  /** Engine params as heard from listening position `id` (new object). */
+  function applyListener(params, id) {
+    const L = listener(id);
+    const out = Object.assign({}, params);
+    for (const key of Object.keys(L.mods)) {
+      const s = SCHEMA.find((x) => x.key === key);
+      if (!s || typeof out[key] !== 'number') continue;
+      const m = L.mods[key];
+      let v = out[key] * (m.mul !== undefined ? m.mul : 1) + (m.add || 0);
+      if (s.min !== undefined) v = Math.max(s.min, v);
+      if (s.max !== undefined) v = Math.min(s.max, v);
+      out[key] = v;
+    }
+    return out;
+  }
+
   function defaults() {
     const p = {};
     for (const s of SCHEMA) p[s.key] = s.def;
@@ -214,5 +324,8 @@ window.PhysicalParams = (function () {
     catch (e) { /* ignore */ }
   }
 
-  return { STORAGE_KEY, GROUPS, SCHEMA, defaults, load, save };
+  return {
+    STORAGE_KEY, GROUPS, SCHEMA, LISTENERS,
+    defaults, load, save, listener, applyListener,
+  };
 })();

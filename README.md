@@ -132,6 +132,29 @@ user gesture before audio can play).
     exported/imported as JSON; the tuned set is stored in
     `localStorage` and used by the simulator. Defaults model a
     cross-plane V8.
+  - **Engine presets** ([`js/engine-presets.js`](js/engine-presets.js),
+    ⚙ Settings → Engine preset, also loadable in the tuner): one pick sets
+    the whole car — the physical sound model _and_ the drivetrain (rev
+    range, idle, gears, shift points and shift speed, top speed, rev
+    response). Street: VW Golf TDI (I4 diesel), Golf GTI (I4 turbo),
+    Toyota GR Yaris (I3 turbo), Subaru WRX STI (boxer-4 with
+    unequal-length headers), BMW M3 E46 (I6), V8 muscle car (the original
+    default). Sports: Porsche 911 GT3 (flat-6), Ferrari 458 (flat-plane
+    V8), Lamborghini Huracán (V10), Ferrari 812 (V12), Mazda RX-8
+    (rotary). Racing: Formula 1 V10 (2005, 19,000 rpm) and F1 V6 turbo
+    hybrid (2014+). Real-world figures for the drivetrain; the acoustic
+    values are tuned by ear to evoke each engine. Tweaking anything
+    afterwards marks the preset as modified, with a one-tap restore.
+  - **Listening position** (Settings, or the 🎧 button in the bottom bar
+    to cycle): _Original_ (the raw model, next to the engine), _Inside_
+    (driver's seat: bodywork lowpass, cabin bass boom, firewall intake
+    noise, muffled tailpipe, a small damped room) and _Outside_ (a few
+    metres away: tailpipe-dominated, brighter bark, ground and street
+    reflections). Positions are relative modifiers layered automatically
+    on top of whatever engine is active (preset or hand-tuned), plus an
+    acoustic-space stage (lowpass, boom resonance, generated impulse
+    response) after the FX bus — see `LISTENERS` in
+    [`js/physical-params.js`](js/physical-params.js).
   - **Sample packs** (`js/samples.js`): an engine library registered in
     the editable [`sounds/engines.js`](sounds/engines.js) — one folder
     per engine, each configured by a commented
@@ -156,13 +179,16 @@ user gesture before audio can play).
 | Speed source                   | Manual slider / Pedals / GPS                |
 | Units                          | km/h / mph                                  |
 | Speed smoothing                | 0.05 – 1.5 s (lower = snappier vs GPS)      |
+| Engine preset                  | 13 engines, street cars to Formula 1        |
+| Listening position             | Original / Inside the car / Outside         |
 | Engine sound                   | Physical model / Synthesized / sample packs |
-| Max RPM                        | 4,000 – 12,000                              |
-| Idle RPM                       | 500 – 1,500                                 |
+| Max RPM                        | 4,000 – 20,000                              |
+| Idle RPM                       | 500 – 5,000                                 |
 | Cylinders                      | 2 – 12                                      |
 | Neutral rev-up / rev-down time | 0.1 – 2.5 s                                 |
 | Gears                          | 3 – 10                                      |
 | Shift-up / shift-down RPM      | configurable with hysteresis guard          |
+| Shift time                     | 0.03 – 0.6 s (torque cut per gear change)   |
 | Max speed                      | 120 – 400 km/h                              |
 | Volume                         | 0 – 100%                                    |
 | Start sound volume             | 0 – 200% (relative to volume)               |
@@ -192,7 +218,7 @@ If you enjoy it, **give the repo a ⭐ — it's the best kind of thank-you.**
 
 Possible future ideas:
 
-- More physical-model presets (inline-4 turbo, flat-plane V8, diesel…)
+- More listening positions (e.g. drive-by / pit lane, helmet cam)
 - Manual shifting mode (paddle buttons)
 - OBD-II / vehicle API speed input where available
 
