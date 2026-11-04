@@ -36,7 +36,8 @@
     revDownTime: 0.85, // neutral rev-down time constant (s)
     speedSmoothing: 0.3, // s: speed-follow lag (lower = snappier vs GPS)
     volume: 70,
-    startVolume: 150, // ignition clip level, % relative to master volume
+    startVolume: 150, // ignition level, % relative to master volume
+    startSound: "synth", // physical model: 'synth' (starter motor model) | 'sample' (recorded clip)
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
     listener: "original", // physical model listening position: original|cabin|outside
@@ -163,6 +164,8 @@
     el.speedUnitLabel.textContent = unitLabel();
     sound.setVolume(settings.volume / 100);
     physicalSound.setListener(settings.listener);
+    // The synthesized starter's reference level is the 150% default
+    physicalSound.setStarterLevel(settings.startVolume / 150);
     setSource(settings.source);
     setActiveSound();
     updateSettingsVisibility();
@@ -230,6 +233,7 @@
     // Listening positions are part of the physical model
     $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("btn-listener").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
@@ -604,6 +608,7 @@
   function syncSettingsUI() {
     $("set-source").value = settings.source;
     $("set-units").value = settings.units;
+    $("set-startsound").value = settings.startSound;
     populateSoundSelect();
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
@@ -633,6 +638,10 @@
     }
     $("set-source").addEventListener("change", (e) => {
       settings.source = e.target.value;
+      applySettings();
+    });
+    $("set-startsound").addEventListener("change", (e) => {
+      settings.startSound = e.target.value;
       applySettings();
     });
     $("set-units").addEventListener("change", (e) => {
@@ -685,7 +694,7 @@
 
   // ---------- Engine start/stop ----------
   let engineOn = false;
-  let cranking = null; // { elapsed } while the starter clip cranks
+  let cranking = null; // { elapsed } or { seq: IgnitionSequence } while starting
   let shutdown = null; // { snd, elapsed, rpm0, faded } during key-off spin-down
 
   // Shared starter (ignition) clip, played for every sound engine when the
@@ -741,6 +750,11 @@
     }
   }
 
+  /** Physical model with the synthesized starter (instead of the clip)? */
+  function synthStart(snd) {
+    return snd === physicalSound && settings.startSound === "synth";
+  }
+
   async function startEngine(opts = {}) {
     const withStarter = opts.withStarter !== false;
     // Cancel any in-flight spin-down / crank so a quick re-start is clean.
@@ -761,7 +775,18 @@
     }
     engineOn = true;
     el.engineToggle.textContent = "■ STOP ENGINE";
-    if (withStarter && sound.ctx) {
+    if (withStarter && sound.ctx && synthStart(sound)) {
+      // Starter motor, cranking and catch are all synthesized by the model
+      const p = physicalSound.params;
+      cranking = {
+        seq: new IgnitionSequence({
+          idleRpm: settings.idleRpm,
+          crankRpm: p.crankRpm,
+          crankTime: p.crankTime,
+        }),
+      };
+      sound.fadeIn(0, 0.03);
+    } else if (withStarter && sound.ctx) {
       playStarter(sound.ctx);
       sound.fadeIn(STARTER_CATCH, STARTER_FADE); // swell in as the engine catches
       cranking = { elapsed: 0 };
@@ -790,6 +815,9 @@
       elapsed: 0,
       rpm0: Math.max(engine.rpm, settings.idleRpm),
       faded: false,
+      // Synthesized ignition: key-off cuts combustion, so the model spins
+      // down on compression alone (and shudders to a stop)
+      ign: synthStart(sound) ? { comb: 0, crank: false } : undefined,
     };
   }
 
@@ -845,6 +873,7 @@
         settings.cylinders,
         false,
         0,
+        shutdown.ign,
       );
       // Fade the last of the sound out so the low-rpm tail doesn't drone.
       if (!shutdown.faded && p > 0.55) {
@@ -860,7 +889,20 @@
         sLoad = engine.throttle;
       let sShift = engine.shifting,
         sDir = engine.shiftDir;
-      if (cranking) {
+      let sIgn;
+      if (cranking && cranking.seq) {
+        // Synthesized start: the sequence drives revs, load, combustion
+        // and the starter engagement; the needle follows it.
+        const st = cranking.seq.update(dt);
+        dispRpm = st.rpm;
+        dispThrottle = st.load;
+        sRpm = st.rpm;
+        sLoad = st.load;
+        sShift = false;
+        sDir = 0;
+        sIgn = st;
+        if (st.done) cranking = null;
+      } else if (cranking) {
         // Follow the recording: the needle sits low while the starter cranks,
         // then on catch (~0.8s) the revs flare up and settle back to idle —
         // and we feed that same curve to the generated engine so it blips in
@@ -909,6 +951,7 @@
         settings.cylinders,
         sShift,
         sDir,
+        sIgn,
       );
     }
 

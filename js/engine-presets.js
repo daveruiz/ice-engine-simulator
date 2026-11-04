@@ -54,6 +54,8 @@ window.EnginePresets = (function () {
         whineGain: 0.3, hissGain: 0.2, blowoffGain: 0,
         popChance: 0, drive: 2.0, masterLp: 6500,
         bassFreq: 110, bassGain: 5, midFreq: 1200, midGain: 2, satMix: 0.4,
+        // Starter & ignition
+        crankRpm: 180, crankTime: 1.3, compressionDip: 0.5, pumpLevel: 0.09, ringTeeth: 135, starterGain: 0.7,
       },
     },
     {
@@ -75,6 +77,8 @@ window.EnginePresets = (function () {
         whineGain: 0.2, hissGain: 0.25, blowoffGain: 0.4,
         popChance: 0.12, popGain: 2.5, drive: 1.8,
         bassFreq: 100, bassGain: 6, midFreq: 700, midGain: 1.5,
+        // Starter & ignition
+        crankRpm: 260, crankTime: 0.6, compressionDip: 0.34, ringTeeth: 135,
       },
     },
     {
@@ -95,6 +99,8 @@ window.EnginePresets = (function () {
         whineGain: 0.25, hissGain: 0.3, blowoffGain: 0.6,
         popChance: 0.15, drive: 1.9,
         bassFreq: 110, bassGain: 7, midFreq: 600, midGain: 2,
+        // Starter & ignition
+        crankRpm: 250, crankTime: 0.6, compressionDip: 0.45, ringTeeth: 120,
       },
     },
     {
@@ -116,6 +122,8 @@ window.EnginePresets = (function () {
         whineGain: 0.2, hissGain: 0.3, blowoffGain: 0.9,
         popChance: 0.15,
         bassFreq: 110, bassGain: 8,
+        // Starter & ignition
+        crankRpm: 230, crankTime: 0.8, compressionDip: 0.36, ringTeeth: 130,
       },
     },
     {
@@ -135,6 +143,8 @@ window.EnginePresets = (function () {
         mechGain: 0.3, res2Freq: 4500, chainGain: 0.1,
         popChance: 0.08, drive: 1.7, masterLp: 9000,
         bassGain: 5, midFreq: 900, midGain: 2,
+        // Starter & ignition
+        crankRpm: 240, crankTime: 0.75, compressionDip: 0.26, ringTeeth: 135,
       },
     },
     {
@@ -164,6 +174,8 @@ window.EnginePresets = (function () {
         mechGain: 0.4, res1Freq: 950, res2Freq: 5200, res2Gain: 0.35, chainGain: 0.12,
         popChance: 0.12, popGain: 2.5, drive: 1.9, masterLp: 10000,
         bassGain: 5, midFreq: 1500, midGain: 2.5, trebleGain: 1,
+        // Starter & ignition
+        crankRpm: 250, crankTime: 0.7, compressionDip: 0.26, ringTeeth: 140,
       },
     },
     {
@@ -183,6 +195,8 @@ window.EnginePresets = (function () {
         mechGain: 0.3, res2Freq: 5500,
         popChance: 0.15, drive: 2.0, masterLp: 11000,
         bassGain: 4, midFreq: 1800, midGain: 3, trebleGain: 1.5,
+        // Starter & ignition
+        crankRpm: 280, crankTime: 0.6, compressionDip: 0.2, ringTeeth: 140,
       },
     },
     {
@@ -201,6 +215,8 @@ window.EnginePresets = (function () {
         mufflerCutoff: 1400, straightMix: 0.45,
         popChance: 0.25, popGain: 3.5, drive: 2.1, masterLp: 10000,
         bassGain: 6, midFreq: 1200, midGain: 2,
+        // Starter & ignition
+        crankRpm: 270, crankTime: 0.7, compressionDip: 0.17, ringTeeth: 145,
       },
     },
     {
@@ -220,6 +236,8 @@ window.EnginePresets = (function () {
         mechGain: 0.3, res2Freq: 6000,
         popChance: 0.1, drive: 2.0, masterLp: 12000,
         bassGain: 4, midFreq: 2000, midGain: 3, trebleGain: 1.5,
+        // Starter & ignition
+        crankRpm: 260, crankTime: 0.8, compressionDip: 0.12, ringTeeth: 150,
       },
     },
     {
@@ -240,6 +258,8 @@ window.EnginePresets = (function () {
         mechGain: 0.15, res2Gain: 0.1, chainGain: 0,
         popChance: 0.35, popGain: 3.5, drive: 2.4, masterLp: 9000,
         bassGain: 6, midFreq: 800, midGain: 2, satMix: 0.45,
+        // Starter & ignition
+        crankRpm: 260, crankTime: 0.9, compressionDip: 0.2, ringTeeth: 110, solenoidGain: 0.6,
       },
     },
     // ------------------------------------------------------------ Racing
@@ -262,6 +282,8 @@ window.EnginePresets = (function () {
         popChance: 0.08, popGain: 2, drive: 2.2, masterLp: 14000,
         bassFreq: 150, bassGain: 3, midFreq: 2500, midGain: 3, trebleGain: 2,
         satDrive: 3, satMix: 0.4,
+        // Starter & ignition
+        crankRpm: 450, crankTime: 0.5, compressionDip: 0.14, ringTeeth: 210, starterGain: 0.8, solenoidGain: 0.25,
       },
     },
     {
@@ -283,6 +305,8 @@ window.EnginePresets = (function () {
         whineGain: 0.4, hissGain: 0.25, blowoffGain: 0.15,
         popChance: 0.05, drive: 2.0, masterLp: 13000,
         bassGain: 3, midFreq: 2000, midGain: 2, trebleGain: 1,
+        // Starter & ignition
+        crankRpm: 450, crankTime: 0.5, compressionDip: 0.2, ringTeeth: 210, starterGain: 0.8, solenoidGain: 0.25,
       },
     },
   ];

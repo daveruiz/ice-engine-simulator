@@ -21,8 +21,17 @@
  *     ├── per firing event: mechanical impact (piston slap / valve seat)
  *     │   ──> two resonant "engine block" modes (bandpass)
  *     ├── camshaft-rate random ticks ──> chain/accessory rattle bandpass
- *     └── exhaust-energy-driven turbo spool state ──> turbine whine
- *         (blade-pass tone), boost hiss, blow-off burst on throttle lift
+ *     ├── exhaust-energy-driven turbo spool state ──> turbine whine
+ *     │   (blade-pass tone), boost hiss, blow-off burst on throttle lift
+ *     └── starter motor (engine start): pinion meshed with the flywheel
+ *         ring gear → gear-mesh whine + commutator buzz + brush noise,
+ *         loaded by every compression stroke; solenoid clack / pinion
+ *         clank / release click; free spin-down after disengaging
+ *
+ *   Ignition: `comb` (0..1) is the chance each cylinder cycle fires.
+ *   Unfired cycles only pump air (pumpLevel). With combustion off and low
+ *   revs the crank slows into each compression stroke (compressionDip):
+ *   the cranking "rur-rur" and the final shudder when the engine dies.
  *
  *   mix ──> tanh soft clip (drive) ──> master lowpass ──> DC blocker
  *
@@ -32,8 +41,9 @@
  * inversion — giving the odd-harmonic resonances of a closed/open pipe.
  * Delay length D = 2·L·sr/c for acoustic length L.
  *
- * Control: main thread posts {type:'state', rpm, load, maxRpm} every
- * frame and {type:'params', params} when a tuner slider moves. All
+ * Control: main thread posts {type:'state', rpm, load, maxRpm, comb, crank}
+ * every frame (comb = combustion 0..1, crank = starter engaged) and
+ * {type:'params', params} when a tuner slider moves. All
  * parameters are defined in js/physical-params.js.
  */
 'use strict';
@@ -106,6 +116,9 @@ class Bandpass {
 }
 
 const MAX_CYL = 16;
+const STARTER_RATIO = 12;    // starter armature turns per crank turn
+const COMMUTATOR_BARS = 21;  // brush buzz pulses per armature turn (kept off
+                             // any ring-gear count: no slow mesh/buzz beating)
 
 class PhysicalEngineProcessor extends AudioWorkletProcessor {
   constructor(options) {
@@ -123,6 +136,19 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.phase = 0;
     this.cycleAmp = new Float32Array(MAX_CYL).fill(1);
     this.cyclePop = new Uint8Array(MAX_CYL);
+    this.cycleFire = new Uint8Array(MAX_CYL).fill(1);
+
+    // Ignition / starter state
+    this.combT = 1; this.comb = 1;  // combustion (1 = running normally)
+    this.stEng = 0;                 // starter pinion engaged
+    this.stRps = 0;                 // starter armature speed (rev/s)
+    this.stMeshPh = 0; this.stCommPh = 0; this.stArmPh = 0;
+    this.solEnv = 0; this.thumpEnv = 0; this.thumpPh = 0;
+    this.pinEnv = 0; this.pinDelay = 0;
+    this.starterLevel = 1;
+    this.bpSol = new Bandpass();
+    this.bpPin = new Bandpass();
+    this.bpBrush = new Bandpass();
     this.wobble = 0; this.wobbleT = 0;
 
     // Waveguides (sized for ≤6 m pipe / ≤3.75 m runner at 96 kHz)
@@ -151,6 +177,20 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         this.rpmT = m.rpm;
         this.loadT = m.load;
         if (m.maxRpm) this.maxRpm = m.maxRpm;
+        if (m.comb !== undefined) this.combT = m.comb;
+        const eng = m.crank ? 1 : 0;
+        if (eng !== this.stEng) {
+          this.stEng = eng;
+          if (eng) {
+            // Key turned: solenoid pulls in, pinion slams onto the ring gear
+            this.solEnv = 1;
+            this.thumpEnv = 1;
+            this.pinDelay = Math.round(0.022 * this.sr);
+          } else {
+            this.solEnv = 0.45; // pinion retracts: lighter release click
+          }
+        }
+        if (m.starterLevel !== undefined) this.starterLevel = m.starterLevel;
       } else if (m.type === 'params') {
         this.P = m.params;
         this._applyParams();
@@ -208,6 +248,16 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.popGapSamples = Math.round(0.06 * sr);
 
     this.driveNorm = 1 / Math.tanh(Math.max(0.3, P.drive));
+
+    // Starter & ignition
+    this.kComb = tauCoef(0.04, sr);
+    this.kStLock = tauCoef(0.004, sr);         // pinion locked to the ring gear
+    this.stSpinDown = Math.exp(-1 / (0.45 * sr)); // free armature spin-down
+    this.solDecay = Math.exp(-1 / (0.006 * sr));
+    this.thumpDecay = Math.exp(-1 / (0.045 * sr));
+    this.bpSol.set(2300, 4, sr);
+    this.bpPin.set(3600, 7, sr);
+    this.bpBrush.set(1800, 1.2, sr);
   }
 
   process(inputs, outputs) {
@@ -230,9 +280,20 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       const load = this.load;
       const rpmNorm = Math.min(1, this.rpm / this.maxRpm);
 
+      // ---- ignition: combustion amount (misfiring while catching) ----
+      this.comb += (this.combT - this.comb) * this.kComb;
+
       // ---- crankshaft (with idle wobble) ----
+      // Without combustion at low revs, the crank slows into every
+      // compression stroke (slowest at each TDC, i.e. phase c/N).
       this.wobble += (this.wobbleT - this.wobble) * this.kWobble;
-      const dp = this.rpm * (1 + this.wobble) / (120 * sr);
+      const crankRef = P.crankRpm || 200;
+      const lowRev = Math.max(0, Math.min(1,
+        (2.5 * crankRef - this.rpm) / (1.5 * crankRef)));
+      const dip = (P.compressionDip || 0) * (1 - this.comb) * lowRev;
+      const comp = 0.5 + 0.5 * Math.cos(TWO_PI * N * this.phase);
+      const sf = 1 - dip * comp; // instantaneous crank speed factor
+      const dp = this.rpm * (1 + this.wobble) * sf / (120 * sr);
       this.phase += dp;
       if (this.phase >= 1) {
         this.phase -= 1;
@@ -251,8 +312,14 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           // New cycle for this cylinder: combustion strength varies
           // shot-to-shot (mixture/ignition dispersion, strongest at idle)
           this.cycleAmp[c] = 1 + P.variability * (Math.random() * 4 - 2);
+          // Ignition: does this cylinder fire this cycle? (always, once
+          // running; sometimes while the engine is catching; never while
+          // cranking or after key-off)
+          const fire = this.comb > 0.995 ? 1 :
+            (Math.random() < this.comb * this.comb * 1.2 ? 1 : 0);
+          this.cycleFire[c] = fire;
           let pop = 0;
-          if (overrun && this.samplesSincePop > this.popGapSamples &&
+          if (fire && overrun && this.samplesSincePop > this.popGapSamples &&
               Math.random() < P.popChance) {
             pop = 1;
             this.samplesSincePop = 0;
@@ -265,9 +332,16 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           // Exhaust blow-down pressure pulse (raised cosine squared)
           let g = 0.5 - 0.5 * Math.cos(TWO_PI * x / w);
           g *= g;
-          let a = (P.idleLevel + (1 - P.idleLevel) * load) * this.cycleAmp[c];
-          let nMix = P.fireNoise;
-          if (this.cyclePop[c]) { a *= P.popGain; nMix = 1; }
+          let a, nMix;
+          if (this.cycleFire[c]) {
+            a = (P.idleLevel + (1 - P.idleLevel) * load) * this.cycleAmp[c];
+            nMix = P.fireNoise;
+            if (this.cyclePop[c]) { a *= P.popGain; nMix = 1; }
+          } else {
+            // Unfired: just the compressed charge puffing out (air noise)
+            a = (P.pumpLevel || 0) * this.cycleAmp[c];
+            nMix = 0.9;
+          }
           const sig = a * g * (1 + nMix * (Math.random() * 2 - 1));
           if (this.bank[c]) exR += sig; else exL += sig;
         }
@@ -339,8 +413,62 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         turbo = whine + hiss + blow;
       }
 
+      // ---- starter motor + solenoid ----
+      let starter = 0;
+      if (this.stEng || this.stRps > 0.5 || this.solEnv > 1e-4 ||
+          this.thumpEnv > 1e-4 || this.pinEnv > 1e-4 || this.pinDelay > 0) {
+        const crankRps = this.rpm * sf / 60;
+        const refRps = crankRef / 60 * STARTER_RATIO;
+        let amp;
+        if (this.stEng) {
+          // Meshed: armature locked to the crank through the gears. It
+          // strains (louder) into every compression stroke and gets
+          // dragged faster when the engine catches (pinion overrun).
+          this.stRps += (crankRps * STARTER_RATIO - this.stRps) * this.kStLock;
+          const strain = dip > 0 ? comp * dip / Math.max(0.05, P.compressionDip) : 0;
+          amp = 0.4 + 1.4 * strain;
+        } else {
+          this.stRps *= this.stSpinDown; // freewheels to a stop
+          amp = 0.55 * Math.min(1, this.stRps / refRps);
+        }
+        let motor = 0;
+        if (this.stRps > 0.5) {
+          // Gear mesh whine (only while the pinion is in the ring gear)
+          let mesh = 0;
+          if (this.stEng) {
+            this.stMeshPh += (P.ringTeeth || 150) * crankRps / sr;
+            if (this.stMeshPh >= 1) this.stMeshPh -= Math.floor(this.stMeshPh);
+            const m = TWO_PI * this.stMeshPh;
+            mesh = Math.sin(m) + 0.45 * Math.sin(2 * m + 0.7) +
+              0.25 * Math.sin(3 * m + 1.9);
+          }
+          // Commutator buzz + brush noise + armature hum
+          this.stCommPh += this.stRps * COMMUTATOR_BARS / sr;
+          if (this.stCommPh >= 1) this.stCommPh -= Math.floor(this.stCommPh);
+          const cs = Math.sin(TWO_PI * this.stCommPh);
+          const pulse = cs * cs * cs * cs * cs * cs;
+          const brush = this.bpBrush.tick(white) * pulse;
+          this.stArmPh += this.stRps / sr;
+          if (this.stArmPh >= 1) this.stArmPh -= Math.floor(this.stArmPh);
+          const hum = Math.sin(TWO_PI * this.stArmPh);
+          motor = (mesh * 0.35 + (pulse - 0.3) * 0.5 + brush * 1.6 + hum * 0.06) * amp;
+        }
+        // Solenoid pull-in / release click, pinion clank
+        this.solEnv *= this.solDecay;
+        this.thumpEnv *= this.thumpDecay;
+        this.thumpPh += 120 / sr;
+        if (this.thumpPh >= 1) this.thumpPh -= 1;
+        if (this.pinDelay > 0 && --this.pinDelay === 0) this.pinEnv = 1;
+        this.pinEnv *= this.solDecay;
+        const clicks = this.bpSol.tick(white * this.solEnv) * 3 +
+          Math.sin(TWO_PI * this.thumpPh) * this.thumpEnv * 0.5 +
+          this.bpPin.tick(white * this.pinEnv) * 3.5;
+        starter = (motor * P.starterGain + clicks * P.solenoidGain) *
+          this.starterLevel * 0.25;
+      }
+
       // ---- mix, saturate, tone, DC-block ----
-      let sum = exhaust + intake + mech + chain + turbo;
+      let sum = exhaust + intake + mech + chain + turbo + starter;
       sum = Math.tanh(sum * P.drive) * this.driveNorm;
       this.mLp += (sum - this.mLp) * this.masterK;
       const y = this.mLp - this.dcX + 0.995 * this.dcY;

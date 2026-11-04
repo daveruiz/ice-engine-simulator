@@ -21,6 +21,7 @@ window.PhysicalParams = (function () {
     { id: 'mech',    name: 'Mechanical / valvetrain' },
     { id: 'turbo',   name: 'Turbocharger' },
     { id: 'pops',    name: 'Overrun pops' },
+    { id: 'starter', name: 'Starter & ignition' },
     { id: 'out',     name: 'Output' },
     { id: 'fx',      name: 'FX bus (EQ & saturation)' },
   ];
@@ -166,6 +167,33 @@ window.PhysicalParams = (function () {
     { key: 'masterGain', group: 'out', label: 'Master level',
       min: 0, max: 2, step: 0.01, def: 1.0 },
 
+    // ---- Starter motor & ignition (synthesized engine start) ----
+    // Used when Settings → Start sound is "Synthesized": the key engages a
+    // solenoid, the starter pinion meshes with the flywheel ring gear and
+    // spins the crank without combustion (it slows into every compression
+    // stroke), until the first cylinders fire and the engine catches.
+    { key: 'crankRpm', group: 'starter', label: 'Cranking speed', unit: 'rpm',
+      min: 100, max: 600, step: 10, def: 200,
+      info: 'How fast the starter turns the engine over. Heavy, high-compression engines (diesels) crank slower.' },
+    { key: 'crankTime', group: 'starter', label: 'Cranking time', unit: 's',
+      min: 0.2, max: 3, step: 0.05, def: 0.9,
+      info: 'Time on the starter before the engine catches (varies ±15% each start, like a real one).' },
+    { key: 'compressionDip', group: 'starter', label: 'Compression drag',
+      min: 0, max: 0.7, step: 0.01, def: 0.28,
+      info: 'How much the crank slows into each compression stroke while cranking — the "rur-rur-rur". Big for few cylinders / high compression, small for V12s whose strokes overlap. Also gives the last shudder when the engine stops.' },
+    { key: 'pumpLevel', group: 'starter', label: 'Unfired cylinder level',
+      min: 0, max: 0.3, step: 0.005, def: 0.07,
+      info: 'Air pushed through the exhaust by a cylinder that does not fire (cranking, misfires, key-off spin-down).' },
+    { key: 'ringTeeth', group: 'starter', label: 'Ring gear teeth',
+      min: 80, max: 220, step: 1, def: 153,
+      info: 'Flywheel ring gear tooth count: the starter gear whine sits at teeth × crank revolutions per second.' },
+    { key: 'starterGain', group: 'starter', label: 'Starter motor level',
+      min: 0, max: 1.5, step: 0.01, def: 0.6,
+      info: 'Electric motor whine, commutator buzz and gear mesh of the starter.' },
+    { key: 'solenoidGain', group: 'starter', label: 'Solenoid clack level',
+      min: 0, max: 1.5, step: 0.01, def: 0.7,
+      info: 'Solenoid pull-in, pinion clank onto the ring gear and the release click.' },
+
     // ---- FX bus (post-synthesis EQ + parallel saturation) ----
     // Runs as native WebAudio nodes after the worklet (see physical.js):
     // low shelf -> mid peak -> high shelf -> parallel tanh saturation.
@@ -231,6 +259,8 @@ window.PhysicalParams = (function () {
         hissGain: { mul: 0.4 },
         blowoffGain: { mul: 0.6 },
         popGain: { mul: 0.85 },
+        starterGain: { mul: 0.8 },
+        solenoidGain: { mul: 0.7 },
         // Tone: bodywork transmission loss (highs) + cabin bass build-up
         masterLp: { mul: 0.5 },
         bassFreq: { mul: 0.9 },
@@ -265,6 +295,8 @@ window.PhysicalParams = (function () {
         hissGain: { mul: 0.6 },
         blowoffGain: { mul: 1.1 },
         popGain: { mul: 1.15 },
+        starterGain: { mul: 0.6 },
+        solenoidGain: { mul: 0.6 },
         bassGain: { add: -3 },
         trebleGain: { add: 1 },
       },

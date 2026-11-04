@@ -23,7 +23,7 @@
     href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🏎%3C/text%3E%3C/svg%3E">
   <!-- Bump ?v= on every release: defeats stale-cache mismatches between
      index.html and assets (GitHub Pages caches for 10 minutes) -->
-  <link rel="stylesheet" href="css/style.css?v=32" />
+  <link rel="stylesheet" href="css/style.css?v=33" />
 </head>
 
 <body>
@@ -225,6 +225,16 @@
         <label for="set-volume">Volume <output id="out-volume"></output></label>
         <input type="range" id="set-volume" min="0" max="100" step="1">
       </div>
+      <div class="setting-row" id="row-startsound">
+        <label for="set-startsound">Start sound</label>
+        <select id="set-startsound">
+          <option value="synth">Synthesized (starter motor model)</option>
+          <option value="sample">Recorded clip</option>
+        </select>
+        <p class="hint">Synthesized: solenoid clack, starter motor whine, the crank
+        dragging through each compression stroke, then misfires as it catches —
+        shaped per engine (Starter &amp; ignition in the tuner).</p>
+      </div>
       <div class="setting-row">
         <label for="set-startvol">Start sound volume <output id="out-startvol"></output></label>
         <input type="range" id="set-startvol" min="0" max="200" step="5">
@@ -242,14 +252,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=32"></script>
-  <script src="js/sound.js?v=32"></script>
-  <script src="js/samples.js?v=32"></script>
-  <script src="js/physical-params.js?v=32"></script>
-  <script src="js/engine-presets.js?v=32"></script>
-  <script src="js/physical.js?v=32"></script>
-  <script src="js/dashboard.js?v=32"></script>
-  <script src="js/main.js?v=32"></script>
+  <script src="js/engine.js?v=33"></script>
+  <script src="js/sound.js?v=33"></script>
+  <script src="js/samples.js?v=33"></script>
+  <script src="js/physical-params.js?v=33"></script>
+  <script src="js/engine-presets.js?v=33"></script>
+  <script src="js/physical.js?v=33"></script>
+  <script src="js/dashboard.js?v=33"></script>
+  <script src="js/main.js?v=33"></script>
 </body>
 
 </html>

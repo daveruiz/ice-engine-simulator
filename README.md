@@ -98,12 +98,25 @@ user gesture before audio can play).
   - **Braking**: under hard braking the gear is held (no shifting mid-stop);
     the gears drop through only as the car crawls to a halt. Downshifts get a
     rev-match throttle blip in the sound; upshifts get a torque cut.
-- **Ignition & shutdown**: turning the key plays a shared cranking clip
-  ([`sounds/start.ogg`](sounds/start.ogg)) and, as the engine catches
-  (~0.8 s in), swells the generated engine up under the sample's tail — for
-  whichever sound engine is active. Stopping winds the revs down to a halt
-  (the tacho falls with it) before the sound is cut, instead of an abrupt
-  fade.
+- **Ignition & shutdown**: with the physical model the engine start is
+  **synthesized** by default (Settings → Start sound): turning the key
+  pulls in the solenoid (clack) and slams the starter pinion onto the
+  flywheel ring gear (clank); the starter motor — gear-mesh whine at
+  ring-teeth × crank speed, commutator buzz, brush noise — spins the crank
+  with no combustion, slowing into every compression stroke (the
+  "rur-rur-rur", with the starter straining and dropping pitch on each
+  one); the odd cylinder fires, then combustion ramps in with misfires,
+  the revs flare, the engine overruns the pinion (its whine shoots up)
+  and the starter disengages and spins down. Key-off cuts combustion, so
+  the engine winds down on compression alone and shudders to a stop.
+  Cranking speed/time, compression drag, ring gear teeth and levels are
+  per engine (Starter & ignition group in the tuner, set by every preset:
+  a diesel cranks slow and lumpy, a V12 smooth, an F1 fast on its external
+  starter). The recorded clip ([`sounds/start.ogg`](sounds/start.ogg)) is
+  still available — and used by the other sound engines: it plays as the
+  key turns and the generated engine swells up under its tail as it
+  catches (~0.8 s in). Stopping winds the revs down to a halt (the tacho
+  falls with it) before the sound is cut, instead of an abrupt fade.
 - **Sound** — three interchangeable engines (Settings → Sound):
   - **Synthesized** (`js/sound.js`, always available): firing frequency
     `rpm / 60 × cylinders / 2` drives a stack of detuned saw/square
@@ -191,6 +204,7 @@ user gesture before audio can play).
 | Shift time                     | 0.03 – 0.6 s (torque cut per gear change)   |
 | Max speed                      | 120 – 400 km/h                              |
 | Volume                         | 0 – 100%                                    |
+| Start sound (physical model)   | Synthesized starter / recorded clip         |
 | Start sound volume             | 0 – 200% (relative to volume)               |
 
 New installs default to **GPS** input and the **physical** engine sound.

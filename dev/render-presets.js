@@ -4,10 +4,13 @@
 // idle → two free-rev blips → full-throttle pull through the gears →
 // lift-off. Writes one WAV per preset × listening position and prints
 // level / bass-ratio stats, handy for balancing presets and positions.
+// `--scenario start` renders the synthesized ignition instead: key on →
+// starter cranking → catch → idle → key-off spin-down.
 //
 //   node render-presets.js                       # everything → ./renders
 //   node render-presets.js --preset f1-v10 --listener cabin --out /tmp/x
 //   node render-presets.js --seconds 12
+//   node render-presets.js --scenario start --listener original
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -25,7 +28,8 @@ const opt = (name, def) => {
 const OUT = path.resolve(opt('out', path.join(__dirname, 'renders')));
 const ONLY_PRESET = opt('preset', null);
 const ONLY_LISTENER = opt('listener', null);
-const SECONDS = Number(opt('seconds', 10));
+const SCENARIO = opt('scenario', 'drive');
+const SECONDS = Number(opt('seconds', SCENARIO === 'start' ? 6 : 10));
 
 function findChromium() {
   if (process.env.CHROMIUM_PATH) return { executablePath: process.env.CHROMIUM_PATH };
@@ -69,8 +73,10 @@ async function main() {
       if (ONLY_PRESET && id !== ONLY_PRESET) continue;
       for (const lis of listeners) {
         if (ONLY_LISTENER && lis !== ONLY_LISTENER) continue;
-        const r = await page.evaluate(renderInPage, { id, lis, seconds: SECONDS });
-        const file = path.join(OUT, `${id}_${lis}.wav`);
+        const r = await page.evaluate(renderInPage,
+          { id, lis, seconds: SECONDS, scenario: SCENARIO });
+        const suffix = SCENARIO === 'drive' ? '' : '_' + SCENARIO;
+        const file = path.join(OUT, `${id}_${lis}${suffix}.wav`);
         fs.writeFileSync(file, Buffer.from(r.wav, 'base64'));
         console.log(id.padEnd(14), lis.padEnd(9), r.rmsDb.toFixed(1).padStart(6),
           r.peak.toFixed(2).padStart(5), (r.bass * 100).toFixed(0).padStart(5));
@@ -83,7 +89,7 @@ async function main() {
 }
 
 /** Runs inside the page: render one preset from one listening position. */
-async function renderInPage({ id, lis, seconds }) {
+async function renderInPage({ id, lis, seconds, scenario }) {
   const SR = 48000, STEP = 512; // control rate: one render-quantum multiple
   const frames = Math.round(seconds * SR / STEP) * STEP;
   const ctx = new OfflineAudioContext(2, frames, SR);
@@ -93,7 +99,7 @@ async function renderInPage({ id, lis, seconds }) {
   sound.setListener(lis);
   sound.setVolume(0.7);
   await sound.start({ context: ctx });
-  sound.fadeIn(0, 0.05);
+  sound.fadeIn(0, scenario === 'start' ? 0.01 : 0.05);
 
   const cfg = Object.assign({}, preset.engine);
   cfg.shiftUpRpm = Math.min(cfg.shiftUpRpm, cfg.maxRpm - 200);
@@ -111,9 +117,34 @@ async function renderInPage({ id, lis, seconds }) {
     if (t < 8.3 * k) return { n: false, speed: cfg.maxSpeed };
     return { n: false, speed: 0 };
   };
+  // Ignition scenario (same flow as main.js): synthesized start, idle,
+  // then key-off with combustion cut, revs winding down over 1.3 s
+  const params = sound.params;
+  const ign = new IgnitionSequence({ idleRpm: cfg.idleRpm,
+    crankRpm: params.crankRpm, crankTime: params.crankTime, randomize: false });
+  const KEY_OFF = seconds - 1.8;
+  let ignDone = false, faded = false;
   for (let f = STEP; f < frames; f += STEP) {
     const t = f / SR;
     ctx.suspend(t).then(async () => {
+      if (scenario === 'start') {
+        if (t < KEY_OFF) {
+          let st = null;
+          if (!ignDone) { st = ign.update(dt); ignDone = st.done; }
+          engine.update(dt);
+          sound.update(st ? st.rpm : engine.rpm, st ? st.load : engine.throttle,
+            cfg.maxRpm, 0, false, 0, st || undefined);
+        } else {
+          const p = Math.min(1, (t - KEY_OFF) / 1.3);
+          const rpm = cfg.idleRpm * Math.pow(1 - p, 1.6) *
+            (1 + 0.05 * Math.sin((t - KEY_OFF) * 30) * (1 - p));
+          sound.update(rpm, 0, cfg.maxRpm, 0, false, 0, { comb: 0, crank: false });
+          if (!faded && p > 0.55) { sound.fadeOut(1.3 * 0.45); faded = true; }
+        }
+        await new Promise((r) => setTimeout(r, 0));
+        ctx.resume();
+        return;
+      }
       const d = drive(t);
       engine.setNeutral(d.n);
       if (d.n) engine.setRevDemand(d.rev); else engine.setTargetSpeed(d.speed);

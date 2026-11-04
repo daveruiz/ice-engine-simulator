@@ -27,6 +27,7 @@ class PhysicalEngineSound {
     // baseParams: the engine as tuned/preset. params: what the DSP runs,
     // i.e. baseParams with the listening-position modifiers applied.
     this.listener = 'original';
+    this.starterLevel = 1;
     this.baseParams = window.PhysicalParams.load();
     this.params = this._effective();
     window.addEventListener('storage', (e) => {
@@ -58,7 +59,7 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=18');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=19');
     this.ctx = ctx;
 
     this.node = new AudioWorkletNode(ctx, 'physical-engine', {
@@ -283,14 +284,26 @@ class PhysicalEngineSound {
    * setting from the main page is ignored — cylinder count and geometry
    * belong to the physical parameter set (tune them in tuner.html).
    */
-  update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir) {
+  update(rpm, throttle, maxRpm, cylinders, shifting, shiftDir, ign) {
     if (!this.running || !this.node) return;
     // Upshift: torque cut. Downshift: rev-match blip.
     let load = throttle;
     if (shifting) {
       load = shiftDir < 0 ? Math.max(throttle, 0.55) : throttle * 0.15;
     }
-    this.node.port.postMessage({ type: 'state', rpm, load, maxRpm });
+    // ign (optional): { comb: combustion 0..1, crank: starter engaged }.
+    // Omitted = engine running normally.
+    this.node.port.postMessage({
+      type: 'state', rpm, load, maxRpm,
+      comb: ign ? ign.comb : 1,
+      crank: !!(ign && ign.crank),
+      starterLevel: this.starterLevel,
+    });
+  }
+
+  /** Synthesized starter/solenoid level (1 = as tuned). */
+  setStarterLevel(v) {
+    this.starterLevel = v;
   }
 
   /** Replace the engine parameter set (tuner/preset); safe while running. */
@@ -324,4 +337,62 @@ class PhysicalEngineSound {
   }
 }
 
+/**
+ * IgnitionSequence — the synthesized engine start, as a control curve fed
+ * to PhysicalEngineSound.update() (shared by the simulator and the tuner):
+ *
+ *   key on → solenoid + pinion engage, the starter spins the crank up to
+ *   cranking speed (no combustion: compression strokes drag it, see
+ *   compressionDip) → a stray firing or two near the end → catch:
+ *   combustion ramps in with misfires, revs flare to ~1.8× idle, the
+ *   pinion is overrun and disengages → revs settle to idle.
+ *
+ * Cranking speed and time come from the physical params (crankRpm,
+ * crankTime); the crank time varies ±15% per start like a real engine.
+ */
+class IgnitionSequence {
+  constructor({ idleRpm, crankRpm, crankTime, randomize = true }) {
+    this.idle = idleRpm;
+    this.crank = Math.min(crankRpm, idleRpm * 0.8);
+    this.crankTime = crankTime * (randomize ? 0.85 + Math.random() * 0.3 : 1);
+    this.t = 0;
+    this.engaged = true;
+    this.done = false;
+  }
+
+  /** Advance dt seconds → { rpm, load, comb, crank, done }. */
+  update(dt) {
+    this.t += dt;
+    const t = this.t, C = this.crank, idle = this.idle;
+    const smooth = (p) => p * p * (3 - 2 * p);
+    const SPIN_UP = 0.18;   // s: starter accelerating the crank from rest
+    const RISE = 0.22;      // s: catch → flare peak
+    const FALL = 0.95;      // s: flare peak → idle
+    const peak = idle * 1.8;
+    let rpm, comb = 0, load = 0;
+    if (t < this.crankTime) {
+      rpm = t < SPIN_UP ? C * smooth(t / SPIN_UP) : C * (1 + 0.04 * (t - SPIN_UP));
+      // Near the end the odd cylinder fires on its own
+      if (t > this.crankTime * 0.65) comb = 0.25;
+    } else {
+      const te = t - this.crankTime;
+      const C2 = C * (1 + 0.04 * Math.max(0, this.crankTime - SPIN_UP));
+      comb = Math.min(1, 0.45 + (0.55 * te) / 0.3);
+      if (te < RISE) {
+        rpm = C2 + (peak - C2) * smooth(te / RISE);
+        load = 0.75; // all cylinders firing hard to pick the revs up
+      } else {
+        const p = Math.min(1, (te - RISE) / FALL);
+        rpm = peak + (idle - peak) * smooth(p);
+        load = 0.35 * (1 - p);
+        if (p >= 1) this.done = true;
+      }
+      // Pinion overrun: the engine now drives the starter → it disengages
+      if (this.engaged && (rpm > C2 * 1.7 || te > 0.25)) this.engaged = false;
+    }
+    return { rpm, load, comb, crank: this.engaged, done: this.done };
+  }
+}
+
 window.PhysicalEngineSound = PhysicalEngineSound;
+window.IgnitionSequence = IgnitionSequence;

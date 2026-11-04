@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0e13">
 <title>Engine Tuner — ICE Simulator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🔧%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=32">
+<link rel="stylesheet" href="css/style.css?v=33">
 <style>html { overflow: auto; height: auto; }</style>
 </head>
 <body class="tuner-page">
@@ -58,10 +58,12 @@
       <button class="quick" id="btn-blip">BLIP</button>
       <button class="quick" id="btn-wot">HOLD = FULL THROTTLE</button>
       <button class="quick" id="btn-zero">LIFT OFF</button>
+      <button class="quick" id="btn-crank">🔑 RESTART</button>
     </div>
     <p class="hint">For overrun pops: rev high, then LIFT OFF (or release the
     speed slider in Drive mode) — closed throttle at revs fires unburnt
-    mixture in the exhaust.</p>
+    mixture in the exhaust. 🔑 RESTART replays the synthesized engine start
+    (tune it under Starter &amp; ignition).</p>
   </section>
 
   <!-- Engine presets (js/engine-presets.js) -->
@@ -92,10 +94,10 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=32"></script>
-<script src="js/physical-params.js?v=32"></script>
-<script src="js/engine-presets.js?v=32"></script>
-<script src="js/physical.js?v=32"></script>
-<script src="js/tuner.js?v=32"></script>
+<script src="js/engine.js?v=33"></script>
+<script src="js/physical-params.js?v=33"></script>
+<script src="js/engine-presets.js?v=33"></script>
+<script src="js/physical.js?v=33"></script>
+<script src="js/tuner.js?v=33"></script>
 </body>
 </html>

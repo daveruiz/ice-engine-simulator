@@ -193,17 +193,28 @@
   let mode = 'rev';        // 'rev' | 'drive'
   let throttle = 0;        // 0..1 (rev mode)
   let wotHeld = false;
+  let ignition = null;     // IgnitionSequence while the engine is starting
+
+  function crank() {
+    ignition = new IgnitionSequence({
+      idleRpm: engine.cfg.idleRpm,
+      crankRpm: params.crankRpm,
+      crankTime: params.crankTime,
+    });
+  }
 
   $('btn-run').addEventListener('click', async () => {
     if (running) {
       sound.stop();
       running = false;
+      ignition = null;
       $('btn-run').textContent = '▶ START ENGINE';
       return;
     }
     try {
       await sound.start();
-      sound.fadeIn(0, 0.3); // start() now leaves the master silent
+      sound.fadeIn(0, 0.03); // start() leaves the master silent
+      crank(); // the synthesized starter brings the engine to life
     } catch (err) {
       alert('Could not start audio: ' + err.message);
       return;
@@ -247,6 +258,16 @@
   });
   wotBtn.addEventListener('pointerup', () => holdWot(false));
   wotBtn.addEventListener('pointercancel', () => holdWot(false));
+  $('btn-crank').addEventListener('click', async () => {
+    if (!running) { $('btn-run').click(); return; }
+    // Key off for a moment, then crank again: restart the audio graph so
+    // the model starts from rest
+    sound.stop();
+    await new Promise((r) => setTimeout(r, 350));
+    await sound.start();
+    sound.fadeIn(0, 0.03);
+    crank();
+  });
   $('btn-zero').addEventListener('click', () => {
     if (mode === 'rev') {
       $('bench-throttle').value = '0';
@@ -276,13 +297,19 @@
     }
     engine.update(dt);
 
-    if (running) {
+    let rpm = engine.rpm, load = engine.throttle;
+    if (running && ignition) {
+      const st = ignition.update(dt);
+      rpm = st.rpm; load = st.load;
+      sound.update(rpm, load, engine.cfg.maxRpm, params.cylinders, false, 0, st);
+      if (st.done) ignition = null;
+    } else if (running) {
       sound.update(engine.rpm, engine.throttle, engine.cfg.maxRpm,
         params.cylinders, engine.shifting, engine.shiftDir);
     }
 
-    $('bench-rpm').textContent = String(Math.round(engine.rpm / 10) * 10);
-    $('bench-load').textContent = String(Math.round(engine.throttle * 100));
+    $('bench-rpm').textContent = String(Math.round(rpm / 10) * 10);
+    $('bench-load').textContent = String(Math.round(load * 100));
     $('bench-gear').textContent = engine.displayGear;
     requestAnimationFrame(loop);
   }
