@@ -156,6 +156,9 @@ window.PhysicalParams = (function () {
     { key: 'whineMax', group: 'turbo', label: 'Whine at full spool', unit: 'Hz',
       min: 3000, max: 16000, step: 100, def: 9500,
       info: 'Turbine whine frequency at full spool (blade-pass frequency).' },
+    { key: 'whineNoise', group: 'turbo', label: 'Whine blur',
+      min: 0, max: 1, step: 0.01, def: 0.1,
+      info: 'How much of the turbo whistle is a blown, noisy whistle rather than a clean tone. Higher = less crisp (e.g. heard through the intake ducts inside the car).' },
     { key: 'spoolTime', group: 'turbo', label: 'Spool-up time', unit: 's',
       min: 0.1, max: 2.0, step: 0.05, def: 0.5,
       info: 'Turbine inertia — lag between exhaust energy and boost.' },
@@ -322,11 +325,13 @@ window.PhysicalParams = (function () {
         res2Gain: { mul: 0.35 },        // valvetrain clatter goes first
         chainGain: { mul: 0.05 },
         mechTone: { set: 1400 },
-        // Turbo: the whistle carries into the cabin; hiss mostly doesn't
-        whineGain: { mul: 0.5 },
+        // Turbo: still heard inside, but dulled and blurred by the ducts and
+        // the firewall — a soft blown whistle, not a crisp tone
+        whineGain: { mul: 0.95 },
+        whineNoise: { set: 0.8 },
         hissGain: { mul: 0.3 },
-        blowoffGain: { mul: 0.55 },
-        turboTone: { set: 8000 },
+        blowoffGain: { mul: 0.6 },
+        turboTone: { set: 1800 },
         // Bangs: a hard but dull thump through the body — the noisy crack
         // of the explosion stays outside
         popGain: { mul: 0.85 },
