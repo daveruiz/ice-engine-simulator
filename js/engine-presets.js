@@ -57,7 +57,7 @@ window.EnginePresets = (function () {
         // Texture & overrun bangs
         phaseJitter: 1.2, cylImbalance: 0.08, vibration: 1.5,
         // Starter & ignition
-        crankRpm: 180, crankTime: 1.3, compressionDip: 0.5, pumpLevel: 0.09, ringTeeth: 135, starterGain: 0.7,
+        crankRpm: 180, crankTime: 1.3, compressionDip: 0.5, pumpLevel: 0.045, ringTeeth: 135, starterGain: 0.7,
       },
     },
     {
@@ -80,7 +80,7 @@ window.EnginePresets = (function () {
         popChance: 0.12, popGain: 2.5, drive: 1.8,
         bassFreq: 100, bassGain: 6, midFreq: 700, midGain: 1.5,
         // Texture & overrun bangs
-        bangLevel: 0.75, crackle: 0.3, vibration: 1.0,
+        bangLevel: 0.75, crackle: 0.3, popDecay: 0.8, vibration: 1.0,
         // Starter & ignition
         crankRpm: 260, crankTime: 0.6, compressionDip: 0.34, ringTeeth: 135,
       },
@@ -227,10 +227,10 @@ window.EnginePresets = (function () {
         runnerLength: 0.5, runnerFb: 0.3, runnerImbalance: 1.04,
         exhaustLength: 2.2, exhaustLp: 2600,
         mufflerCutoff: 1400, straightMix: 0.45,
-        popChance: 0.25, popGain: 3.5, drive: 2.1, masterLp: 10000,
+        popChance: 0.2, popGain: 3.5, drive: 2.1, masterLp: 10000,
         bassGain: 6, midFreq: 1200, midGain: 2,
         // Texture & overrun bangs
-        bangLevel: 1.3, crackle: 0.8, bangDrive: 6, vibration: 0.8,
+        bangLevel: 1.15, crackle: 0.6, bangDrive: 6, popDecay: 1.6, vibration: 0.8,
         // Starter & ignition
         crankRpm: 270, crankTime: 0.7, compressionDip: 0.17, ringTeeth: 145,
       },
@@ -277,7 +277,7 @@ window.EnginePresets = (function () {
         popChance: 0.35, popGain: 3.5, drive: 2.4, masterLp: 9000,
         bassGain: 6, midFreq: 800, midGain: 2, satMix: 0.45,
         // Texture & overrun bangs
-        phaseJitter: 3.5, cylImbalance: 0.14, bangLevel: 1.3, crackle: 0.7, vibration: 0.45,
+        phaseJitter: 3.5, cylImbalance: 0.14, bangLevel: 1.3, crackle: 0.7, popDecay: 1.8, vibration: 0.45,
         // Starter & ignition
         crankRpm: 260, crankTime: 0.9, compressionDip: 0.2, ringTeeth: 110, solenoidGain: 0.6,
       },
@@ -303,7 +303,7 @@ window.EnginePresets = (function () {
         bassFreq: 150, bassGain: 3, midFreq: 2500, midGain: 3, trebleGain: 2,
         satDrive: 3, satMix: 0.4,
         // Texture & overrun bangs
-        phaseJitter: 0.8, cylImbalance: 0.04, bangLevel: 0.8, crackle: 0.3, vibration: 1.4,
+        phaseJitter: 0.8, cylImbalance: 0.04, bangLevel: 0.8, crackle: 0.3, popDecay: 0.8, vibration: 1.4,
         // Starter & ignition
         crankRpm: 450, crankTime: 0.5, compressionDip: 0.14, ringTeeth: 210, starterGain: 0.8, solenoidGain: 0.25,
       },
