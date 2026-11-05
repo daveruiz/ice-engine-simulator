@@ -272,7 +272,10 @@ a { color: var(--accent-2); text-decoration-color: rgba(47, 208, 255, 0.4); text
   aspect-ratio: 1;
   min-width: 0;
 }
-.gauge-wrap canvas { width: 100%; height: 100%; display: block; }
+.gauge-wrap { display: flex; align-items: center; justify-content: center; }
+/* the canvas' CSS size is set from JS (largest square that fits): never
+   stretched, whatever shape the box ends up */
+.gauge-wrap canvas { display: block; flex: 0 0 auto; }
 
 #center-stack {
   flex: 0 0 auto;
