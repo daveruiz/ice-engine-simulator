@@ -23,6 +23,7 @@ class Gauge {
     this.startAngle = (140 * Math.PI) / 180;
     this.endAngle = (400 * Math.PI) / 180;
     this._resize();
+    this._observe();
   }
 
   setRange(max, majorStep, redFrom) {
@@ -35,14 +36,42 @@ class Gauge {
     this.opts.unit = unit;
   }
 
+  /**
+   * Size the dial to the largest square that fits its box and set the
+   * canvas' CSS size explicitly, so the drawing is never stretched — even
+   * when flex layout squeezes the box out of square, or on older browsers
+   * (e.g. some car browsers) without CSS aspect-ratio.
+   */
   _resize() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
-    const size = Math.max(50, Math.min(rect.width, rect.height));
-    this.canvas.width = size * dpr;
-    this.canvas.height = size * dpr;
+    const wrap = this.canvas.parentElement;
+    let w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!Gauge.hasAspectRatio) {
+      // No aspect-ratio: the box is only sized on one axis — square it here
+      if (window.matchMedia('(orientation: portrait)').matches) h = w;
+      else { wrap.style.width = h + 'px'; w = wrap.clientWidth; } // flex may shrink it
+    }
+    if (!h) h = w;
+    const size = Math.max(50, Math.floor(Math.min(w, h)));
+    if (size !== this.size) {
+      this.canvas.style.width = size + 'px';
+      this.canvas.style.height = size + 'px';
+    }
+    this.canvas.width = Math.round(size * dpr);
+    this.canvas.height = Math.round(size * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.size = size;
+  }
+
+  /** Follow the box's size (layout changes that aren't window resizes). */
+  _observe() {
+    if (!('ResizeObserver' in window)) return;
+    let pending = false;
+    new ResizeObserver(() => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => { pending = false; this._resize(); });
+    }).observe(this.canvas.parentElement);
   }
 
   _angleFor(v) {
@@ -194,5 +223,7 @@ class Gauge {
     }
   }
 }
+
+Gauge.hasAspectRatio = !!(window.CSS && CSS.supports && CSS.supports('aspect-ratio', '1 / 1'));
 
 window.Gauge = Gauge;
