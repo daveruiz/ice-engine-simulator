@@ -57,6 +57,10 @@
  *   them, so e.g. inside the car the engine-bay clatter loses its highs
  *   through the firewall while the turbo whistle and the bang keep theirs.
  *
+ *   Mixer (tuner): every source has a gain (solo / mute) and, when
+ *   metering is on, its RMS as heard at the listener (after its path,
+ *   before the mute) is posted ~12×/s: SOURCES lists them in order.
+ *
  *   Output 1 is the overrun bang layer: when unburnt mixture ignites it
  *   cracks at the tailpipe (unmuffled), with optional after-crackle. It's
  *   kept separate so the host can saturate it hard and mix it past the
@@ -173,6 +177,10 @@ class Bandpass {
 }
 
 const MAX_CYL = 16;
+// Mixer channels (same order as PhysicalEngineSound.SOURCES)
+const SOURCES = ['exhaust', 'intake', 'mech', 'chain', 'whine', 'hiss',
+  'blowoff', 'starter', 'vibration', 'bangs'];
+const NSRC = SOURCES.length;
 const STARTER_RATIO = 12;    // starter armature turns per crank turn
 const COMMUTATOR_BARS = 21;  // brush buzz pulses per armature turn (kept off
                              // any ring-gear count: no slow mesh/buzz beating)
@@ -261,7 +269,13 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.mLp = 0; this.dcX = 0; this.dcY = 0;
     this.vib1 = 0; this.vib2 = 0; this.vibHp = 0;
     // per-source transmission-path lowpass states
-    this.tEx = 0; this.tIn = 0; this.tMe = 0; this.tTu = 0; this.tSt = 0; this.tBa = 0;
+    this.tEx = 0; this.tIn = 0; this.tMe = 0; this.tCh = 0; this.tSt = 0; this.tBa = 0;
+    this.tWh = 0; this.tHs = 0; this.tBo = 0;
+    // mixer: per-source gain (solo/mute) and RMS meters
+    this.mixG = new Float32Array(NSRC).fill(1);
+    this.meterAcc = new Float64Array(NSRC);
+    this.meterN = 0;
+    this.metersOn = false;
 
     this._applyParams();
 
@@ -285,6 +299,9 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           }
         }
         if (m.starterLevel !== undefined) this.starterLevel = m.starterLevel;
+      } else if (m.type === 'mix') {
+        for (let k = 0; k < NSRC; k++) this.mixG[k] = m.gains[k] === undefined ? 1 : m.gains[k];
+        this.metersOn = !!m.meters;
       } else if (m.type === 'params') {
         this.P = m.params;
         this._applyParams();
@@ -549,7 +566,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         P.chainGain * (0.25 + 0.75 * rpmNorm) * (1 - 0.5 * load);
 
       // ---- turbocharger ----
-      let turbo = 0;
+      let turbo = 0, whine = 0, hiss = 0, blow = 0;
       if (P.turbo) {
         // Exhaust energy spools the turbine against its inertia
         const tgt = Math.pow(rpmNorm, 1.4) * (0.2 + 0.8 * load);
@@ -567,17 +584,16 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         const tone = Math.sin(TWO_PI * this.turboPh) * 0.75 +
           Math.sin(2 * TWO_PI * this.turboPh + 0.9) * 0.35;
         const blown = wn > 0 ? this.bpWhine.tick(white) * 3.2 : 0;
-        const whine = (tone * (1 - wn) + blown * wn) *
+        whine = (tone * (1 - wn) + blown * wn) *
           s2 * P.whineGain * 0.5 * (0.8 + 0.2 * this.whAm.tick());
         this.hissLp += (white - this.hissLp) * this.hissK;
-        const hiss = (white - this.hissLp) * s2 * P.hissGain * 0.6;
+        hiss = (white - this.hissLp) * s2 * P.hissGain * 0.6;
         // Throttle slams shut under boost -> pressure vents (blow-off)
         if (this.loadSlow - load > 0.35 && this.spool > 0.4 &&
             this.boEnv < 0.1) {
           this.boEnv = this.spool;
         }
         this.boEnv *= this.boDecay;
-        let blow = 0;
         if (this.boEnv > 0.005) {
           blow = this.bpBlow.tick(white) * this.boEnv * P.blowoffGain * 2.5;
         }
@@ -656,20 +672,46 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       }
 
       // ---- transmission path: per-source lowpass to the listener ----
-      let exT = exhaust, inT = intake, meT = mech + chain, tuT = turbo, stT = starter;
+      let exT = exhaust, inT = intake, meT = mech, chT = chain, stT = starter;
+      let whT = whine, hsT = hiss, boT = blow;
       if (this.kTEx < 1) exT = (this.tEx += (exhaust - this.tEx) * this.kTEx);
       if (this.kTIn < 1) inT = (this.tIn += (intake - this.tIn) * this.kTIn);
-      if (this.kTMe < 1) meT = (this.tMe += (mech + chain - this.tMe) * this.kTMe);
-      if (this.kTTu < 1) tuT = (this.tTu += (turbo - this.tTu) * this.kTTu);
+      if (this.kTMe < 1) {
+        meT = (this.tMe += (mech - this.tMe) * this.kTMe);
+        chT = (this.tCh += (chain - this.tCh) * this.kTMe);
+      }
+      if (this.kTTu < 1) {
+        whT = (this.tWh += (whine - this.tWh) * this.kTTu);
+        hsT = (this.tHs += (hiss - this.tHs) * this.kTTu);
+        boT = (this.tBo += (blow - this.tBo) * this.kTTu);
+      }
       if (this.kTSt < 1) stT = (this.tSt += (starter - this.tSt) * this.kTSt);
 
-      let sum = exT + inT + meT + tuT + stT + vib;
+      // ---- mixer: meters (pre-mute) and solo/mute gains ----
+      if (this.metersOn) {
+        const a = this.meterAcc;
+        a[0] += exT * exT; a[1] += inT * inT; a[2] += meT * meT; a[3] += chT * chT;
+        a[4] += whT * whT; a[5] += hsT * hsT; a[6] += boT * boT; a[7] += stT * stT;
+        a[8] += vib * vib;
+      }
+      const g = this.mixG;
+      let sum = exT * g[0] + inT * g[1] + meT * g[2] + chT * g[3] + whT * g[4] +
+        hsT * g[5] + boT * g[6] + stT * g[7] + vib * g[8];
       sum = Math.tanh(sum * P.drive) * this.driveNorm;
       this.mLp += (sum - this.mLp) * this.masterK;
       const y = this.mLp - this.dcX + 0.995 * this.dcY;
       this.dcX = this.mLp;
       this.dcY = y;
       out[i] = y * P.masterGain * 0.7;
+      if (this.metersOn && ++this.meterN >= 4000) {
+        const rms = new Array(NSRC);
+        for (let k = 0; k < NSRC; k++) {
+          rms[k] = Math.sqrt(this.meterAcc[k] / this.meterN);
+          this.meterAcc[k] = 0;
+        }
+        this.meterN = 0;
+        this.port.postMessage({ type: 'meters', rms });
+      }
 
       // ---- overrun bang layer (output 1) ----
       if (bangOut) {
@@ -695,7 +737,9 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           this.bangEnv *= this.bangDecay;
         }
         if (this.kTBa < 1) bang = (this.tBa += (bang - this.tBa) * this.kTBa);
-        bangOut[i] = bang * (P.bangLevel || 0) * 0.8;
+        const bo = bang * (P.bangLevel || 0) * 0.8;
+        if (this.metersOn) this.meterAcc[9] += bo * bo;
+        bangOut[i] = bo * this.mixG[9];
       }
     }
     return true;

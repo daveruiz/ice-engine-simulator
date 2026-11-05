@@ -46,6 +46,7 @@
     const lis = PP.listener(st.listener || 'cabin').id;
     sound.setListener(lis);
     $('bench-listener').value = lis;
+    if (lisBox) renderLis();
   }
 
   // ---------- Parameter UI (generated from the schema) ----------
@@ -137,6 +138,7 @@
     inputs[s.key].output.textContent = fmtValue(s, value);
     PP.save(params);
     sound.setParams(params);
+    if (typeof updateEff === 'function') updateEff();
   }
 
   /** Push `params` back into every control (after reset/import). */
@@ -148,6 +150,7 @@
       if (input.type === 'range') paintRange(input);
       output.textContent = fmtValue(schema, params[key]);
     }
+    if (typeof renderLis === 'function') renderLis();
   }
 
   // ---------- Engine presets ----------
@@ -334,6 +337,247 @@
     $('bench-gear').textContent = engine.displayGear;
     requestAnimationFrame(loop);
   }
+
+  // ---------- Mixer: solo / mute every sound, live level meters ----------
+  const SOURCES = PhysicalEngineSound.SOURCES;
+  const solo = new Set(), mute = new Set();
+  const meterEls = [];
+  const meterDb = SOURCES.map(() => -90);
+  (function buildMixer() {
+    const box = $('mixer-rows');
+    SOURCES.forEach((src, k) => {
+      const row = document.createElement('div');
+      row.className = 'mix-row';
+      row.title = src.info;
+      row.innerHTML = '<span class="mix-name"></span>' +
+        '<span class="mix-meter"><span class="mix-fill"></span></span>' +
+        '<output class="mix-db">—</output>' +
+        '<button class="mix-btn solo" aria-pressed="false" title="Solo">S</button>' +
+        '<button class="mix-btn mute" aria-pressed="false" title="Mute">M</button>';
+      row.querySelector('.mix-name').textContent = src.name;
+      row.querySelector('.solo').addEventListener('click', () => {
+        solo.has(src.id) ? solo.delete(src.id) : solo.add(src.id); applyMix();
+      });
+      row.querySelector('.mute').addEventListener('click', () => {
+        mute.has(src.id) ? mute.delete(src.id) : mute.add(src.id); applyMix();
+      });
+      box.appendChild(row);
+      meterEls[k] = { row, fill: row.querySelector('.mix-fill'), db: row.querySelector('.mix-db') };
+    });
+  })();
+  function applyMix() {
+    const any = solo.size > 0;
+    const gains = SOURCES.map((s) => (any ? (solo.has(s.id) ? 1 : 0) : (mute.has(s.id) ? 0 : 1)));
+    sound.setMix(gains, true);
+    SOURCES.forEach((s, k) => {
+      const r = meterEls[k].row;
+      r.querySelector('.solo').setAttribute('aria-pressed', solo.has(s.id));
+      r.querySelector('.mute').setAttribute('aria-pressed', mute.has(s.id));
+      r.classList.toggle('silenced', gains[k] === 0);
+    });
+  }
+  $('btn-mix-reset').addEventListener('click', () => { solo.clear(); mute.clear(); applyMix(); });
+  sound.onMeters = (rms) => {
+    rms.forEach((v, k) => {
+      const db = 20 * Math.log10(v + 1e-9);
+      // fast attack, slow release, like a mixing-desk meter
+      meterDb[k] = db > meterDb[k] ? db : meterDb[k] - 2.5;
+      const d = meterDb[k];
+      const pct = Math.max(0, Math.min(100, ((d + 60) / 54) * 100));
+      meterEls[k].fill.style.width = pct + '%';
+      meterEls[k].db.textContent = d < -60 ? '—' : Math.round(d) + ' dB';
+    });
+  };
+  applyMix();
+
+  // ---------- Listening-position editor ----------
+  const OPS = [['mul', '×'], ['add', '+'], ['set', '=']];
+  var lisBox = $('lis-editor');
+  let effSpans = [];
+  function schemaOf(key) { return PP.SCHEMA.find((s) => s.key === key); }
+  function fmtAny(s, v) {
+    if (s.type === 'select') { const o = s.options.find((x) => x[0] === v); return o ? o[1].split(' (')[0] : String(v); }
+    if (s.type === 'bool') return v ? 'on' : 'off';
+    return fmtValue(s, v);
+  }
+  function opOf(m) { return m.set !== undefined ? 'set' : (m.add !== undefined ? 'add' : 'mul'); }
+  function valOf(m) { const o = opOf(m); return o === 'set' ? m.set : (o === 'add' ? m.add : m.mul); }
+
+  function updateEff() {
+    const eff = PP.applyListener(params, lisSel.value);
+    for (const { key, span } of effSpans) {
+      const s = schemaOf(key);
+      span.textContent = fmtAny(s, params[key]) + ' → ' + fmtAny(s, eff[key]);
+    }
+  }
+
+  function commitLis(mods, space) {
+    PP.saveListener(lisSel.value, { mods, space });
+    sound.refreshListener();
+    renderLis();
+  }
+
+  function renderLis() {
+    const L = PP.listener(lisSel.value);
+    const mods = JSON.parse(JSON.stringify(L.mods || {}));
+    const space = L.space ? JSON.parse(JSON.stringify(L.space)) : null;
+    effSpans = [];
+    lisBox.innerHTML = '';
+    const h = document.createElement('h3');
+    h.textContent = 'Listening position · ' + L.name + (L.custom ? ' (edited)' : '');
+    lisBox.appendChild(h);
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'Modifiers layered on top of any engine: × multiplies, + adds, = sets a ' +
+      'parameter. Each row shows the engine value → what the listener gets. Edits apply ' +
+      'live, are saved and the simulator uses them too. Switch the position under the test bench.';
+    lisBox.appendChild(p);
+
+    const list = document.createElement('div');
+    list.className = 'lis-list';
+    const keys = PP.SCHEMA.map((s) => s.key).filter((k) => k in mods);
+    if (!keys.length) {
+      const e = document.createElement('p');
+      e.className = 'hint';
+      e.textContent = 'No modifiers: the raw engine model.';
+      list.appendChild(e);
+    }
+    for (const key of keys) {
+      const s = schemaOf(key);
+      const m = mods[key];
+      const row = document.createElement('div');
+      row.className = 'lis-row';
+      const name = document.createElement('span');
+      name.className = 'lis-name';
+      name.textContent = s.label;
+      name.title = s.info || '';
+      const op = document.createElement('select');
+      op.className = 'lis-op';
+      const choice = s.type === 'select' || s.type === 'bool' ? [['set', '=']] : OPS;
+      for (const [v, t] of choice) {
+        const o = document.createElement('option'); o.value = v; o.textContent = t; op.appendChild(o);
+      }
+      op.value = opOf(m);
+      let val;
+      if (s.type === 'select' || s.type === 'bool') {
+        val = document.createElement('select');
+        const opts = s.type === 'bool' ? [[1, 'on'], [0, 'off']] : s.options;
+        for (const [v, t] of opts) {
+          const o = document.createElement('option'); o.value = v; o.textContent = t; val.appendChild(o);
+        }
+        val.value = m.set;
+      } else {
+        val = document.createElement('input');
+        val.type = 'number';
+        val.step = 'any';
+        val.value = valOf(m);
+      }
+      val.className = 'lis-val';
+      const eff = document.createElement('span');
+      eff.className = 'lis-eff';
+      effSpans.push({ key, span: eff });
+      const del = document.createElement('button');
+      del.className = 'lis-del';
+      del.textContent = '✕';
+      del.title = 'Remove this modifier';
+      const write = () => {
+        let v = val.value;
+        if (s.type === 'bool') v = Number(v);
+        else if (s.type !== 'select') v = Number(v);
+        if (s.type !== 'select' && !isFinite(v)) return;
+        mods[key] = { [op.value]: v };
+        PP.saveListener(lisSel.value, { mods, space });
+        sound.refreshListener();
+        updateEff();
+        h.textContent = 'Listening position · ' + L.name + ' (edited)';
+        resetBtn.classList.remove('hidden');
+      };
+      op.addEventListener('change', () => {
+        // sensible starting value for the new operation
+        if (s.type !== 'select' && s.type !== 'bool') {
+          val.value = op.value === 'mul' ? 1 : op.value === 'add' ? 0 : params[key];
+        }
+        write();
+      });
+      val.addEventListener(val.tagName === 'SELECT' ? 'change' : 'input', write);
+      del.addEventListener('click', () => { delete mods[key]; commitLis(mods, space); });
+      row.append(name, op, val, eff, del);
+      list.appendChild(row);
+    }
+    lisBox.appendChild(list);
+
+    // add a modifier for any other parameter
+    const add = document.createElement('div');
+    add.className = 'lis-add';
+    const pick = document.createElement('select');
+    pick.id = 'lis-add-param';
+    for (const g of PP.GROUPS) {
+      const og = document.createElement('optgroup');
+      og.label = g.name;
+      for (const s of PP.SCHEMA) {
+        if (s.group !== g.id || s.key in mods) continue;
+        const o = document.createElement('option'); o.value = s.key; o.textContent = s.label; og.appendChild(o);
+      }
+      if (og.children.length) pick.appendChild(og);
+    }
+    const addBtn = document.createElement('button');
+    addBtn.className = 'quick';
+    addBtn.textContent = 'ADD MODIFIER';
+    addBtn.addEventListener('click', () => {
+      const s = schemaOf(pick.value);
+      if (!s) return;
+      mods[s.key] = s.type === 'select' || s.type === 'bool' ? { set: params[s.key] } : { mul: 1 };
+      commitLis(mods, space);
+    });
+    add.append(pick, addBtn);
+    lisBox.appendChild(add);
+
+    // acoustic space (global path to the ear)
+    if (space) {
+      const sh = document.createElement('h4');
+      sh.textContent = 'Acoustic space (whole mix)';
+      lisBox.appendChild(sh);
+      const grid = document.createElement('div');
+      grid.className = 'lis-space';
+      for (const [k, label, unit, min, max, step] of PP.SPACE_FIELDS) {
+        if (space[k] === undefined) continue;
+        const r = document.createElement('label');
+        r.className = 'lis-sf';
+        r.textContent = label + (unit ? ' (' + unit + ')' : '');
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.min = min; inp.max = max; inp.step = step; inp.value = space[k];
+        inp.addEventListener('input', () => {
+          const v = Number(inp.value);
+          if (!isFinite(v)) return;
+          space[k] = Math.max(min, Math.min(max, v));
+          PP.saveListener(lisSel.value, { mods, space });
+          sound.refreshListener();
+          resetBtn.classList.remove('hidden');
+        });
+        r.appendChild(inp);
+        grid.appendChild(r);
+      }
+      lisBox.appendChild(grid);
+    }
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'quick' + (L.custom ? '' : ' hidden');
+    resetBtn.textContent = 'RESET ' + L.short + ' TO DEFAULTS';
+    resetBtn.addEventListener('click', () => {
+      PP.resetListener(lisSel.value);
+      sound.refreshListener();
+      renderLis();
+    });
+    const rb = document.createElement('div');
+    rb.className = 'quick-buttons lis-reset';
+    rb.appendChild(resetBtn);
+    lisBox.appendChild(rb);
+    updateEff();
+  }
+  lisSel.addEventListener('change', renderLis);
+  window.addEventListener('storage', (e) => {
+    if (e.key === PP.LISTENER_KEY) { PP.loadListeners(); sound.refreshListener(); renderLis(); }
+  });
 
   buildParamsUI();
   refreshUI();

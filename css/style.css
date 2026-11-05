@@ -651,7 +651,9 @@ input[type="range"]::-moz-range-thumb {
 /* The tuner is a normal scrolling document, unlike the app screen
    (tuner.html also resets overflow on <html> with an inline style) */
 body.tuner-page {
-  overflow: auto;
+  /* visible, not auto: the document scrolls, so the sticky side column
+     (bench + mixer) can stick to it */
+  overflow: visible;
   height: auto;
   -webkit-user-select: text;
   user-select: text;
@@ -751,6 +753,71 @@ body.tuner-page {
   resize: vertical;
 }
 
+/* Mixer (tuner): per-sound level meters with solo / mute */
+#mixer { margin-top: 4px; }
+#mixer .hint { margin-bottom: 10px; }
+#mixer-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.mix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5em) 1fr 3.6em 34px 34px;
+  align-items: center;
+  gap: 8px;
+}
+.mix-name { font-size: 0.9rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mix-meter { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.mix-fill {
+  display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--ok) 0 60%, var(--amber) 80%, var(--redline));
+  background-size: 300px 100%;
+  transition: width 60ms linear;
+}
+.mix-db { font-family: var(--f-display); font-weight: 600; font-size: 0.85rem; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.mix-btn {
+  height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--dim); font-family: var(--f-display); font-weight: 700; font-size: 0.9rem; cursor: pointer;
+}
+.mix-btn.solo[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #1a1200; }
+.mix-btn.mute[aria-pressed="true"] { background: var(--redline); border-color: var(--redline); color: #fff; }
+.mix-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.mix-row.silenced .mix-name, .mix-row.silenced .mix-db { opacity: 0.4; }
+.mix-row.silenced .mix-fill { filter: grayscale(1) brightness(0.6); }
+
+/* Listening-position editor (tuner) */
+#lis-editor h4 {
+  font-family: var(--f-display); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--dim); margin: 18px 0 10px;
+}
+#lis-editor > .hint { margin-bottom: 12px; }
+.lis-list { display: flex; flex-direction: column; gap: 6px; }
+.lis-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 96px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+}
+.lis-name { font-size: 0.9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tuner .lis-row select, #tuner .lis-add select { min-height: 34px; padding: 0 26px 0 8px; background-position: right 8px center; font-size: 0.9rem; }
+.lis-row input, .lis-space input {
+  min-height: 34px; padding: 0 8px; width: 100%;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  font-family: var(--f-display); font-weight: 600; font-size: 0.95rem; font-variant-numeric: tabular-nums;
+}
+.lis-eff { font-family: var(--f-display); font-size: 0.85rem; color: var(--accent-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lis-del { height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--dim); cursor: pointer; }
+.lis-del:hover { color: var(--redline); border-color: var(--redline); }
+.lis-add { display: flex; gap: 8px; margin-top: 10px; }
+.lis-add select { flex: 1; min-width: 0; }
+.lis-add .quick { flex: 0 0 auto; min-height: 34px; font-size: 0.85rem; padding: 0 12px; }
+.lis-space { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.lis-sf { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--dim); }
+.lis-reset { margin-top: 12px; }
+#lis-editor { margin-bottom: 18px; }
+@media (max-width: 520px) {
+  .lis-row { grid-template-columns: 1fr 56px 84px 30px; grid-template-areas: "name op val del" "eff eff eff eff"; }
+  .lis-name { grid-area: name; } .lis-op { grid-area: op; } .lis-val { grid-area: val; }
+  .lis-del { grid-area: del; } .lis-eff { grid-area: eff; }
+}
+
 /* Wide screens: bench stays in view on the left, parameters flow in two
    columns on the right */
 @media (min-width: 1100px) {
@@ -758,12 +825,13 @@ body.tuner-page {
     max-width: 1320px;
     display: grid;
     grid-template-columns: minmax(360px, 420px) 1fr;
-    grid-template-areas: "head head" "side params" "side io";
+    grid-template-areas: "head head" "side lis" "side params" "side io";
     column-gap: 40px;
     align-items: start;
   }
   #tuner-header { grid-area: head; }
   #preset-io { grid-area: io; }
+  #lis-editor { grid-area: lis; }
   #tuner-side {
     grid-area: side;
     position: sticky;
