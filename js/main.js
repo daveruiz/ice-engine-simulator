@@ -258,7 +258,8 @@
     document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.listener === L.id);
     });
-    $("listener-hint").textContent = L.desc;
+    $("listener-hint").textContent =
+      L.desc + (L.custom ? " (Customised in the engine tuner.)" : "");
   }
 
   // Show each control only where it applies: Cylinders shapes the built-in
@@ -1084,6 +1085,8 @@
       applySettings();
     } else if (e.key === PP.STORAGE_KEY) {
       updatePresetUI();
+    } else if (e.key === PP.LISTENER_KEY) {
+      updateListenerUI(); // the sound itself is refreshed by physical.js
     }
   });
 

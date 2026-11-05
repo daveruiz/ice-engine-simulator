@@ -40,8 +40,34 @@ class PhysicalEngineSound {
     window.addEventListener('storage', (e) => {
       if (e.key === window.PhysicalParams.STORAGE_KEY) {
         this.setParams(window.PhysicalParams.load());
+      } else if (e.key === window.PhysicalParams.LISTENER_KEY) {
+        // listening positions edited in the tuner (another tab)
+        window.PhysicalParams.loadListeners();
+        this.refreshListener();
       }
     });
+    // Mixer (tuner): per-source gains and level meters
+    this.mixGains = null;
+    this.metersOn = false;
+    this.onMeters = null;
+  }
+
+  /** Re-apply the listening position after its definition changed. */
+  refreshListener() {
+    this._pushParams();
+    this._applySpace(false);
+  }
+
+  /**
+   * Mixer: gains per source (PhysicalEngineSound.SOURCES order, 0/1 for
+   * solo/mute) and whether to post level meters to onMeters(rms[]).
+   */
+  setMix(gains, meters) {
+    this.mixGains = gains;
+    this.metersOn = !!meters;
+    if (this.node) {
+      this.node.port.postMessage({ type: 'mix', gains: gains || [], meters: this.metersOn });
+    }
   }
 
   _effective() {
@@ -66,7 +92,7 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=24');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=25');
     this.ctx = ctx;
 
     // Output 0: the engine. Output 1: overrun tailpipe bangs.
@@ -113,6 +139,10 @@ class PhysicalEngineSound {
     limiter.connect(opts.destination || ctx.destination);
     this._applyComp(true);
     this._applyFx();
+    this.node.port.onmessage = (e) => {
+      if (e.data.type === 'meters' && this.onMeters) this.onMeters(e.data.rms);
+    };
+    if (this.mixGains || this.metersOn) this.setMix(this.mixGains, this.metersOn);
     // Master is left silent; main.js fades it in (see fadeIn) so the
     // starter clip can crank first and the engine swell in as it catches.
     this.running = true;
@@ -241,7 +271,7 @@ class PhysicalEngineSound {
     this.spDry.connect(to);
     this.spaces = {};
     for (const L of window.PhysicalParams.LISTENERS) {
-      if (!L.space) continue;
+      if (!L.space || !L.space.ir) continue;
       const conv = ctx.createConvolver();
       conv.buffer = PhysicalEngineSound._makeIR(ctx, L.space.ir);
       const wet = ctx.createGain();
@@ -472,6 +502,20 @@ class IgnitionSequence {
     return { rpm, load, comb, crank: this.engaged, done: this.done };
   }
 }
+
+// Mixer channels, in the worklet's order (see SOURCES there)
+PhysicalEngineSound.SOURCES = [
+  { id: 'exhaust', name: 'Exhaust', info: 'Combustion pulses through headers, pipe and muffler (incl. the muffled part of the pops).' },
+  { id: 'intake', name: 'Intake', info: 'Induction noise through the intake tract.' },
+  { id: 'mech', name: 'Mechanical', info: 'Piston slap / valve impacts ringing the engine block.' },
+  { id: 'chain', name: 'Chain / accessories', info: 'Timing chain and accessory-drive rattle.' },
+  { id: 'whine', name: 'Turbo whistle', info: 'Turbine blade-pass whine.' },
+  { id: 'hiss', name: 'Turbo hiss', info: 'Broadband boost hiss.' },
+  { id: 'blowoff', name: 'Blow-off', info: 'The "psshh" when the throttle closes under boost.' },
+  { id: 'starter', name: 'Starter', info: 'Starter motor and solenoid (engine start).' },
+  { id: 'vibration', name: 'Body vibration', info: 'Structure-borne firing rumble (inside the car).' },
+  { id: 'bangs', name: 'Tailpipe bangs', info: 'Overrun bangs and crackles at the tailpipe.' },
+];
 
 window.PhysicalEngineSound = PhysicalEngineSound;
 window.IgnitionSequence = IgnitionSequence;

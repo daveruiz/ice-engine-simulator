@@ -159,7 +159,13 @@ user gesture before audio can play).
     calibrated to stay put) and a final safety limiter. **Every physical
     parameter is tweakable live in [`tuner.html`](tuner.html)** (⚙
     Settings → Physical Engine Tuner): pipe lengths, muffler cutoff,
-    firing pattern, cylinder count, turbo, pops… Presets can be
+    firing pattern, cylinder count, turbo, pops… The tuner also has a
+    **mixer** — a live level meter per sound (exhaust, intake, mechanical,
+    chain, turbo whistle / hiss / blow-off, starter, body vibration,
+    bangs) as it reaches the listener, with solo / mute to pick out
+    what you hear — and an **editor for the listening positions** (every
+    modifier as × / + / =, with the engine value → what the listener gets,
+    plus the acoustic space), saved and used by the simulator. Presets can be
     exported/imported as JSON; the tuned set is stored in
     `localStorage` and used by the simulator. Defaults model a
     cross-plane V8.

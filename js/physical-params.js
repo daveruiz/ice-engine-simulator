@@ -294,7 +294,9 @@ window.PhysicalParams = (function () {
    *
    * 'original' is the untouched model (as heard next to the engine).
    */
-  const LISTENERS = [
+  // Built-in definitions; the live LISTENERS below merge in the user's
+  // edits from the tuner (saved under LISTENER_KEY).
+  const LISTENER_DEFAULTS = [
     {
       id: 'original', name: 'Original', short: 'ORIGINAL',
       desc: 'The raw engine model, as tuned — like standing right next to the engine.',
@@ -393,6 +395,62 @@ window.PhysicalParams = (function () {
     },
   ];
 
+  const LISTENER_KEY = 'ice-listener-mods-v1';
+  // Editable acoustic-space fields (the impulse response shape isn't)
+  const SPACE_FIELDS = [
+    ['gain', 'Level after the compressor', '×', 0, 2, 0.01],
+    ['lowpass', 'Global lowpass', 'Hz', 500, 20000, 50],
+    ['lowpassQ', 'Lowpass Q', '', 0.3, 2, 0.05],
+    ['boomFreq', 'Cabin boom frequency', 'Hz', 30, 200, 1],
+    ['boomGain', 'Cabin boom gain', 'dB', -6, 12, 0.5],
+    ['boomQ', 'Cabin boom Q', '', 0.3, 4, 0.05],
+    ['mix', 'Room reflections', '', 0, 1, 0.01],
+  ];
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const LISTENERS = []; // live (defaults + user edits)
+
+  function readListenerEdits() {
+    try { return JSON.parse(localStorage.getItem(LISTENER_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+
+  /** Rebuild LISTENERS (in place) from the defaults + saved edits. */
+  function loadListeners() {
+    const edits = readListenerEdits();
+    LISTENERS.length = 0;
+    for (const d of LISTENER_DEFAULTS) {
+      const L = clone(d);
+      const e = edits[d.id];
+      if (e) {
+        if (e.mods) L.mods = e.mods;
+        if (e.space && L.space) Object.assign(L.space, e.space);
+        L.custom = true;
+      }
+      LISTENERS.push(L);
+    }
+  }
+
+  /** Save edits for a position: { mods, space } (whole mods map). */
+  function saveListener(id, edit) {
+    const edits = readListenerEdits();
+    edits[id] = edit;
+    try { localStorage.setItem(LISTENER_KEY, JSON.stringify(edits)); } catch (e) { /* ignore */ }
+    loadListeners();
+  }
+
+  function resetListener(id) {
+    const edits = readListenerEdits();
+    delete edits[id];
+    try { localStorage.setItem(LISTENER_KEY, JSON.stringify(edits)); } catch (e) { /* ignore */ }
+    loadListeners();
+  }
+
+  function listenerDefaults(id) {
+    return clone(LISTENER_DEFAULTS.find((l) => l.id === id) || LISTENER_DEFAULTS[0]);
+  }
+
+  loadListeners();
+
   function listener(id) {
     return LISTENERS.find((l) => l.id === id) || LISTENERS[0];
   }
@@ -442,7 +500,8 @@ window.PhysicalParams = (function () {
   }
 
   return {
-    STORAGE_KEY, GROUPS, SCHEMA, LISTENERS,
+    STORAGE_KEY, GROUPS, SCHEMA, LISTENERS, LISTENER_KEY, SPACE_FIELDS,
     defaults, load, save, listener, applyListener,
+    loadListeners, saveListener, resetListener, listenerDefaults,
   };
 })();

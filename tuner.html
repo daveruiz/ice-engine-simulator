@@ -9,7 +9,7 @@
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="css/style.css?v=40">
+<link rel="stylesheet" href="css/style.css?v=41">
 <style>html { overflow: auto; height: auto; }</style>
 </head>
 <body class="tuner-page">
@@ -69,6 +69,18 @@
     (tune it under Starter &amp; ignition).</p>
   </section>
 
+  <!-- Mixer: solo / mute each sound and see what reaches the listener -->
+  <section id="mixer">
+    <h3>Mixer</h3>
+    <p class="hint">Level of every sound as it reaches the listener at the selected
+    listening position. <b>S</b> solos a sound (several can be soloed), <b>M</b> mutes it.
+    For finding what you hear; it only affects this page.</p>
+    <div id="mixer-rows"></div>
+    <div class="quick-buttons">
+      <button class="quick" id="btn-mix-reset">ALL ON</button>
+    </div>
+  </section>
+
   <!-- Engine presets (js/engine-presets.js) -->
   <section id="preset-load">
     <h3>Engine preset</h3>
@@ -82,6 +94,9 @@
     </div>
   </section>
   </aside>
+
+  <!-- Listening-position editor (modifiers + acoustic space) -->
+  <section id="lis-editor"></section>
 
   <!-- Parameter groups are generated from js/physical-params.js -->
   <section id="tuner-params"></section>
@@ -98,10 +113,10 @@
   </section>
 </div>
 
-<script src="js/engine.js?v=40"></script>
-<script src="js/physical-params.js?v=40"></script>
-<script src="js/engine-presets.js?v=40"></script>
-<script src="js/physical.js?v=40"></script>
-<script src="js/tuner.js?v=40"></script>
+<script src="js/engine.js?v=41"></script>
+<script src="js/physical-params.js?v=41"></script>
+<script src="js/engine-presets.js?v=41"></script>
+<script src="js/physical.js?v=41"></script>
+<script src="js/tuner.js?v=41"></script>
 </body>
 </html>
