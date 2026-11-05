@@ -105,9 +105,11 @@ user gesture before audio can play).
   ring-teeth × crank speed, commutator buzz, brush noise — spins the crank
   with no combustion, slowing into every compression stroke (the
   "rur-rur-rur", with the starter straining and dropping pitch on each
-  one); the odd cylinder fires, then combustion ramps in with misfires,
-  the revs flare, the engine overruns the pinion (its whine shoots up)
-  and the starter disengages and spins down. Key-off cuts combustion, so
+  one); the odd cylinder fires, then combustion ramps in with misfires
+  and the revs jump to ~1.5× idle almost at once, hang there for half a
+  second and settle back — a curve matched against a recorded start
+  ([`sounds/start.ogg`](sounds/start.ogg)). Cranking sits well below the
+  running engine, so the catch lands with a real jump in level. Key-off cuts combustion, so
   the engine winds down on compression alone and shudders to a stop.
   Cranking speed/time, compression drag, ring gear teeth and levels are
   per engine (Starter & ignition group in the tuner, set by every preset:
@@ -140,6 +142,10 @@ user gesture before audio can play).
     **bangs at the tailpipe** on a separate layer (unmuffled crack +
     low thump, optional after-crackle) that's driven hard into
     saturation and mixed past the compressor so it punches through.
+    Pulling hard builds up "pop heat" (hot exhaust, unburnt fuel) that
+    the overrun uses up, so a lift-off crackles for a second or two and
+    fades instead of popping through every long coast; inside the car a
+    bang arrives as a dull, hard thump.
     No two cycles are alike: every cylinder burns slightly differently
     (the half orders of a real engine), each combustion is jittered in
     timing and duration, the muffler damps the pipe resonance inside its

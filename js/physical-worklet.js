@@ -232,6 +232,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.bpSol = new Bandpass();
     this.bpPin = new Bandpass();
     this.bpBrush = new Bandpass();
+    this.bpGrind = new Bandpass();
+    this.stJit = new SmoothNoise(sampleRate / 40, sampleRate);
     this.wobble = 0; this.wobbleT = 0;
 
     // Waveguides (sized for ≤6 m pipe / ≤3.75 m runner at 96 kHz)
@@ -250,6 +252,11 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.bpBlow = new Bandpass();
     this.spool = 0; this.turboPh = 0; this.boEnv = 0; this.hissLp = 0;
     this.samplesSincePop = 1e9;
+    // "Pop heat": hot exhaust + unburnt fuel built up by pulling hard. It
+    // feeds the overrun pops and is used up during the overrun, so a lift
+    // after a pull crackles for a second or two and then fades, instead of
+    // popping endlessly on a long coast.
+    this.popHeat = 0;
     this.mLp = 0; this.dcX = 0; this.dcY = 0;
     this.vib1 = 0; this.vib2 = 0; this.vibHp = 0;
     // per-source transmission-path lowpass states
@@ -335,6 +342,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.spoolDn = tauCoef(Math.max(0.05, P.spoolTime * 1.6), sr);
     this.boDecay = Math.exp(-1 / (0.18 * sr));
     this.popGapSamples = Math.round(0.06 * sr);
+    this.kPopFill = tauCoef(0.4, sr);
+    this.popBurn = Math.exp(-1 / (Math.max(0.1, P.popDecay || 1.2) * sr));
 
     this.driveNorm = 1 / Math.tanh(Math.max(0.3, P.drive));
 
@@ -354,12 +363,13 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.vibHpK = lpCoef(18, sr);  // (remove the pulse train's DC)
     this.kComb = tauCoef(0.04, sr);
     this.kStLock = tauCoef(0.004, sr);         // pinion locked to the ring gear
-    this.stSpinDown = Math.exp(-1 / (0.45 * sr)); // free armature spin-down
+    this.stSpinDown = Math.exp(-1 / (0.22 * sr)); // free armature spin-down
     this.solDecay = Math.exp(-1 / (0.006 * sr));
     this.thumpDecay = Math.exp(-1 / (0.045 * sr));
     this.bpSol.set(2300, 4, sr);
     this.bpPin.set(3600, 7, sr);
     this.bpBrush.set(1800, 1.2, sr);
+    this.bpGrind.set(900, 0.9, sr);
   }
 
   process(inputs, outputs) {
@@ -416,6 +426,12 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
 
       // ---- cylinders: combustion pulses, intake gates, impacts ----
       const overrun = load < 0.12 && rpmNorm > 0.28;
+      if (overrun) {
+        this.popHeat *= this.popBurn;
+      } else {
+        const fill = Math.min(1, load * 1.3) * Math.max(0, Math.min(1, (rpmNorm - 0.2) * 2.2));
+        this.popHeat += (fill - this.popHeat) * this.kPopFill;
+      }
       const imb = P.cylImbalance || 0;
       const jit = (P.phaseJitter || 0) / 720;             // degrees → cycles
       const wJit = Math.min(0.4, 0.1 * (P.phaseJitter || 0));
@@ -440,8 +456,12 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
             (Math.random() < this.comb * this.comb * 1.2 ? 1 : 0);
           this.cycleFire[c] = fire;
           let pop = 0;
+          // popChance sets a rate (≈ popChance × 80 pops/s with a hot
+          // exhaust), spread over however many cylinder cycles there are,
+          // so a V10 at 6,000 rpm doesn't pop 10× more than a four
           if (fire && overrun && this.samplesSincePop > this.popGapSamples &&
-              Math.random() < P.popChance) {
+              Math.random() < P.popChance * 80 * Math.pow(this.popHeat, 1.2) /
+                Math.max(1, N * this.rpm / 120)) {
             pop = 1;
             this.samplesSincePop = 0;
             // …and it bangs at the tailpipe once the pulse gets there,
@@ -459,7 +479,9 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           }
           this.cyclePop[c] = pop;
           // Piston reaches TDC and fires: mechanical impact on the block
-          this.mechEnv += 0.5 + Math.random() * 0.8;
+          // (piston slap is driven by combustion pressure — much softer
+          // when the cylinder doesn't fire, e.g. while cranking)
+          this.mechEnv += (0.5 + Math.random() * 0.8) * (fire ? 1 : 0.3);
         }
         const xe = x - this.cycleOff[c];
         const wc = this.cycleW[c];
@@ -497,7 +519,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       // ---- intake tract ----
       const white = Math.random() * 2 - 1;
       this.inCol += (white - this.inCol) * this.inColK;
-      const inExc = this.inCol * gate * (0.25 + 0.75 * load) * intakeNorm;
+      const inExc = this.inCol * gate * (0.25 + 0.75 * load) * intakeNorm *
+        (0.35 + 0.65 * this.comb); // cranking: just the starter's slow suction
       const intake = this.inPipe.tick(inExc, sI) *
         P.intakeGain * (0.35 + 0.65 * rpmNorm);
 
@@ -561,7 +584,9 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           // Meshed: armature locked to the crank through the gears. It
           // strains (louder) into every compression stroke and gets
           // dragged faster when the engine catches (pinion overrun).
-          this.stRps += (crankRps * STARTER_RATIO - this.stRps) * this.kStLock;
+          // (with a little cogging / brush-contact speed scatter)
+          this.stRps += (crankRps * STARTER_RATIO * (1 + 0.025 * this.stJit.tick()) -
+            this.stRps) * this.kStLock;
           const strain = dip > 0 ? comp * dip / Math.max(0.05, P.compressionDip) : 0;
           amp = 0.4 + 1.4 * strain;
         } else {
@@ -588,7 +613,11 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           this.stArmPh += this.stRps / sr;
           if (this.stArmPh >= 1) this.stArmPh -= Math.floor(this.stArmPh);
           const hum = Math.sin(TWO_PI * this.stArmPh);
-          motor = (mesh * 0.35 + (pulse - 0.3) * 0.5 + brush * 1.6 + hum * 0.06) * amp;
+          // Mostly a gritty, noisy whirr (brushes + gear rattle), with only a
+          // hint of tone — a real starter isn't a clean electric whine
+          const grind = this.bpGrind.tick(white) * (0.6 + 0.8 * (Math.random() < 0.3 ? 1 : 0));
+          motor = (mesh * 0.12 + (pulse - 0.3) * 0.22 + brush * 2.0 + grind * 1.4 +
+            hum * 0.04) * amp;
         }
         // Solenoid pull-in / release click, pinion clank
         this.solEnv *= this.solDecay;
@@ -601,7 +630,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           Math.sin(TWO_PI * this.thumpPh) * this.thumpEnv * 0.5 +
           this.bpPin.tick(white * this.pinEnv) * 3.5;
         starter = (motor * P.starterGain + clicks * P.solenoidGain) *
-          this.starterLevel * 0.25;
+          this.starterLevel * 0.03;
       }
 
       // ---- mix, saturate, tone, DC-block ----
@@ -650,7 +679,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           this.bangLp += (white - this.bangLp) * this.bangCrackK;
           const crack = white - this.bangLp;
           const body = this.bpBangLo.tick(white) * 4;
-          bang = this.bangPipe.tick((crack * 0.9 + body) * this.bangEnv);
+          const ck = P.bangCrack === undefined ? 1 : P.bangCrack;
+          bang = this.bangPipe.tick((crack * 0.9 * ck + body) * this.bangEnv);
           this.bangEnv *= this.bangDecay;
         }
         if (this.kTBa < 1) bang = (this.tBa += (bang - this.tBa) * this.kTBa);

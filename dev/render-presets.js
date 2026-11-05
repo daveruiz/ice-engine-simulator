@@ -8,7 +8,8 @@
 // starter cranking → catch → idle → key-off spin-down. `--scenario sweep`
 // revs slowly from idle to near redline under load, then lifts off
 // (overrun pops); `--scenario cruise` holds 3,000 rpm at light load (for
-// judging how pure/static the tone is).
+// judging how pure/static the tone is); `--scenario coast` pulls hard for
+// 4 s then engine-brakes in gear at high revs for 6 s (pop density).
 //
 //   node render-presets.js                       # everything → ./renders
 //   node render-presets.js --preset f1-v10 --listener cabin --out /tmp/x
@@ -38,7 +39,7 @@ const OVERRIDES = Object.fromEntries((opt('set', '') || '').split(',').filter(Bo
 const TAG = opt('tag', '');
 const COMP = opt('comp', null); // mix compressor amount 0..1 (default: the app's)
 const SECONDS = Number(opt('seconds',
-  { start: 6, sweep: 11, cruise: 6 }[SCENARIO] || 10));
+  { start: 6, sweep: 11, cruise: 6, coast: 10 }[SCENARIO] || 10));
 
 function findChromium() {
   if (process.env.CHROMIUM_PATH) return { executablePath: process.env.CHROMIUM_PATH };
@@ -138,9 +139,15 @@ async function renderInPage({ id, lis, seconds, scenario, overrides, comp }) {
   for (let f = STEP; f < frames; f += STEP) {
     const t = f / SR;
     ctx.suspend(t).then(async () => {
-      if (scenario === 'sweep' || scenario === 'cruise') {
+      if (scenario === 'sweep' || scenario === 'cruise' || scenario === 'coast') {
         let rpm, load;
         if (scenario === 'cruise') { rpm = 3000; load = 0.35; }
+        else if (scenario === 'coast') {
+          // 4 s hard pull, then 6 s of engine braking in gear at high revs
+          const hi = cfg.maxRpm * 0.8, lo = cfg.maxRpm * 0.4;
+          if (t < 4) { rpm = lo + (hi - lo) * (t / 4); load = 0.85; }
+          else { rpm = hi - (hi - lo) * ((t - 4) / 6); load = 0; }
+        }
         else if (t < 8) {
           rpm = cfg.idleRpm + (cfg.maxRpm * 0.85 - cfg.idleRpm) * (t / 8);
           load = 0.6;

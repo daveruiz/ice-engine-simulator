@@ -66,7 +66,7 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=22');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=23');
     this.ctx = ctx;
 
     // Output 0: the engine. Output 1: overrun tailpipe bangs.
@@ -93,7 +93,13 @@ class PhysicalEngineSound {
     this.bangShaper = ctx.createWaveShaper();
     this.bangShaper.oversample = '4x';
     this.node.connect(this.bangShaper, 1, 0);
-    this.bangShaper.connect(this.fxOut);
+    // …and a lowpass after the saturation (which would otherwise rebuild the
+    // highs the bang's path took away — e.g. a dull thump inside the car)
+    this.bangLp = ctx.createBiquadFilter();
+    this.bangLp.type = 'lowpass';
+    this.bangLp.Q.value = 0.6;
+    this.bangShaper.connect(this.bangLp);
+    this.bangLp.connect(this.fxOut);
     this._bangDrive = 0;
     this._buildSpace(ctx, this.fxOut, this.master);
     // Final safety limiter: only catches peaks (bangs, flares)
@@ -174,6 +180,11 @@ class PhysicalEngineSound {
     }
     this.satDry.gain.setTargetAtTime(1 - p.satMix, t, S);
     this.satWet.gain.setTargetAtTime(p.satMix, t, S);
+    if (this.bangLp) {
+      const nyq = this.ctx.sampleRate * 0.45;
+      const f = !p.bangTone || p.bangTone >= 18000 ? nyq : Math.min(nyq, p.bangTone * 1.3);
+      this.bangLp.frequency.setTargetAtTime(f, t, S);
+    }
     if (this.bangShaper && this._bangDrive !== p.bangDrive) {
       this._bangDrive = p.bangDrive;
       this.bangShaper.curve = PhysicalEngineSound._satCurve(p.bangDrive || 5);
@@ -421,35 +432,42 @@ class IgnitionSequence {
     this.done = false;
   }
 
-  /** Advance dt seconds → { rpm, load, comb, crank, done }. */
+  /**
+   * Advance dt seconds → { rpm, load, comb, crank, done }.
+   * Shape matched to a recorded start (sounds/start.ogg, see dev/): once
+   * it catches the revs jump almost at once (90 % in ~0.14 s) to ~1.5×
+   * idle, hang there briefly, then fall back exponentially (~0.7 s).
+   */
   update(dt) {
     this.t += dt;
     const t = this.t, C = this.crank, idle = this.idle;
     const smooth = (p) => p * p * (3 - 2 * p);
     const SPIN_UP = 0.18;   // s: starter accelerating the crank from rest
-    const RISE = 0.22;      // s: catch → flare peak
-    const FALL = 0.95;      // s: flare peak → idle
-    const peak = idle * 1.8;
+    const RISE_TAU = 0.06;  // s: catch → revs jump up
+    const HOLD = 0.55;      // s: flare hangs near its peak
+    const FALL_TAU = 0.28;  // s: then settles back to idle
+    const peak = idle * 1.5;
     let rpm, comb = 0, load = 0;
     if (t < this.crankTime) {
       rpm = t < SPIN_UP ? C * smooth(t / SPIN_UP) : C * (1 + 0.04 * (t - SPIN_UP));
       // Near the end the odd cylinder fires on its own
-      if (t > this.crankTime * 0.65) comb = 0.25;
+      if (t > this.crankTime * 0.7) comb = 0.2;
     } else {
       const te = t - this.crankTime;
       const C2 = C * (1 + 0.04 * Math.max(0, this.crankTime - SPIN_UP));
-      comb = Math.min(1, 0.45 + (0.55 * te) / 0.3);
-      if (te < RISE) {
-        rpm = C2 + (peak - C2) * smooth(te / RISE);
-        load = 0.75; // all cylinders firing hard to pick the revs up
+      comb = Math.min(1, 0.5 + te / 0.15 * 0.5);
+      if (te < HOLD) {
+        rpm = C2 + (peak - C2) * (1 - Math.exp(-te / RISE_TAU));
+        load = 0.8; // all cylinders firing hard to pick the revs up
       } else {
-        const p = Math.min(1, (te - RISE) / FALL);
-        rpm = peak + (idle - peak) * smooth(p);
-        load = 0.35 * (1 - p);
-        if (p >= 1) this.done = true;
+        const top = C2 + (peak - C2) * (1 - Math.exp(-HOLD / RISE_TAU));
+        const k = Math.exp(-(te - HOLD) / FALL_TAU);
+        rpm = idle + (top - idle) * k;
+        load = 0.4 * Math.exp(-(te - HOLD) / 0.2);
+        if (k < 0.02) { rpm = idle; this.done = true; }
       }
-      // Pinion overrun: the engine now drives the starter → it disengages
-      if (this.engaged && (rpm > C2 * 1.7 || te > 0.25)) this.engaged = false;
+      // Pinion overrun: the engine now drives the starter → it lets go
+      if (this.engaged && (rpm > C2 * 1.4 || te > 0.08)) this.engaged = false;
     }
     return { rpm, load, comb, crank: this.engaged, done: this.done };
   }

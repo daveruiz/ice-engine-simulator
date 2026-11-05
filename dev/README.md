@@ -68,6 +68,7 @@ node render-presets.js --seconds 12
 node render-presets.js --scenario sweep --preset golf-gti   # slow rev-up + lift-off pops
 node render-presets.js --scenario cruise                    # steady 3,000 rpm (tone purity)
 node render-presets.js --scenario start                     # key-on → crank → idle → key-off
+node render-presets.js --scenario coast                     # hard pull, then 6 s overrun (pop density)
 node render-presets.js --preset golf-gti --set exhaustFb=0,turbo=0 --tag test  # overrides
 node render-presets.js --comp 1                             # mix compressor amount 0..1
 ```
