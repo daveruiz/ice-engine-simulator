@@ -175,7 +175,7 @@ window.EnginePresets = (function () {
         shiftDownRpm: 2500, maxSpeed: 318, revUpTime: 0.28, revDownTime: 0.45,
         shiftTime: 0.1, cylinders: 6 },
       physical: {
-        cylinders: 6, firingPattern: 'alternating', fireWidth: 0.038, fireNoise: 0.3,
+        layout: 'rear', cylinders: 6, firingPattern: 'alternating', fireWidth: 0.038, fireNoise: 0.3,
         variability: 0.05, idleLevel: 0.2, idleWobble: 0.012,
         intakeGain: 0.8, intakeLength: 0.38, intakeFb: 0.55, intakeColor: 3500,
         runnerLength: 0.5, runnerFb: 0.3, runnerImbalance: 1.03,
@@ -198,7 +198,7 @@ window.EnginePresets = (function () {
         shiftDownRpm: 2500, maxSpeed: 325, revUpTime: 0.28, revDownTime: 0.45,
         shiftTime: 0.08, cylinders: 8 },
       physical: {
-        cylinders: 8, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.3,
+        layout: 'mid', cylinders: 8, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.3,
         variability: 0.05, idleLevel: 0.2, idleWobble: 0.01,
         intakeGain: 0.75, intakeLength: 0.32, intakeColor: 3500,
         runnerLength: 0.45, runnerFb: 0.35, runnerImbalance: 1.0,
@@ -221,7 +221,7 @@ window.EnginePresets = (function () {
         shiftDownRpm: 2500, maxSpeed: 325, revUpTime: 0.3, revDownTime: 0.5,
         shiftTime: 0.1, cylinders: 10 },
       physical: {
-        cylinders: 10, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.35,
+        layout: 'mid', cylinders: 10, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.35,
         variability: 0.06, idleLevel: 0.22,
         intakeGain: 0.7,
         runnerLength: 0.5, runnerFb: 0.3, runnerImbalance: 1.04,
@@ -291,7 +291,7 @@ window.EnginePresets = (function () {
         shiftDownRpm: 6500, maxSpeed: 350, revUpTime: 0.12, revDownTime: 0.2,
         shiftTime: 0.04, cylinders: 10 },
       physical: {
-        cylinders: 10, firingPattern: 'alternating', fireWidth: 0.03, fireNoise: 0.3,
+        layout: 'mid', cylinders: 10, firingPattern: 'alternating', fireWidth: 0.03, fireNoise: 0.3,
         variability: 0.03, idleLevel: 0.25, idleWobble: 0.005,
         intakeGain: 0.9, intakeLength: 0.25, intakeFb: 0.6, intakeColor: 5000,
         runnerLength: 0.35, runnerFb: 0.4, runnerImbalance: 1.0,
@@ -316,7 +316,7 @@ window.EnginePresets = (function () {
         shiftDownRpm: 6500, maxSpeed: 350, revUpTime: 0.15, revDownTime: 0.25,
         shiftTime: 0.04, cylinders: 6 },
       physical: {
-        cylinders: 6, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.35,
+        layout: 'mid', cylinders: 6, firingPattern: 'alternating', fireWidth: 0.035, fireNoise: 0.35,
         variability: 0.04, idleLevel: 0.2, idleWobble: 0.005,
         intakeGain: 0.4,
         runnerLength: 0.4, runnerFb: 0.35, runnerImbalance: 1.0,

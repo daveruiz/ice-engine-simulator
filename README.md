@@ -183,6 +183,19 @@ user gesture before audio can play).
     hybrid (2014+). Real-world figures for the drivetrain; the acoustic
     values are tuned by ear to evoke each engine. Tweaking anything
     afterwards marks the preset as modified, with a one-tap ↺ restore.
+  - **3D sound** (⚙ Settings → Sound, _experimental_, off by default):
+    instead of one mono mix, every source gets its own place around the
+    listener through a Web Audio `PannerNode` — the engine block (with the
+    chain and starter), intake and turbo where the engine sits (new
+    _Engine position_ parameter: front, mid behind the seats or rear,
+    set per preset), the exhaust and its overrun bangs at the tail. The
+    driver sits on the left, so a front engine is slightly to the right;
+    outside, you stand off the car's left flank. _Headphones_ uses HRTF
+    (binaural: front/back and height); _Speakers_ is equal-power stereo
+    (left/right only). Below 130 Hz the stems stay unpanned (Linkwitz–Riley
+    split, so the bands sum flat) — bass carries little direction — and
+    the body vibration has none. The level matches the mono mix within
+    ~1 dB.
   - **Listening position** (⚙ Settings → Sound; defaults to _Inside_):
     _Original_ (the raw model, next to the engine), _Inside_ (driver's
     seat: the muffled exhaust from behind plus the engine's
@@ -238,6 +251,7 @@ user gesture before audio can play).
 | Engine preset (main screen)    | 13 engines, street cars to Formula 1        |
 | Listening position             | Inside the car (default) / Original / Outside |
 | Compressor (physical model)    | Off – 100% (default 50%)                    |
+| 3D sound (physical model)      | Off (default) / Headphones / Speakers — experimental |
 | Engine sound                   | Physical model / Synthesized / sample packs |
 | Max RPM                        | 4,000 – 20,000                              |
 | Idle RPM                       | 500 – 5,000                                 |

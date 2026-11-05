@@ -622,6 +622,16 @@ input[type="range"]::-moz-range-thumb {
 .setting-row select option { background: var(--panel); color: var(--text); }
 .setting-row input[type="range"] { height: 36px; }
 .hint { color: var(--dim); font-size: 0.85rem; line-height: 1.5; }
+.tag-exp {
+  font-family: var(--f-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
 .reset-row { margin-top: 32px; }
 
 /* Segmented control (listening position) */

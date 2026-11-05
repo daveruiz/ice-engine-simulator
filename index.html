@@ -28,7 +28,7 @@
      index.html and assets (GitHub Pages caches for 10 minutes) -->
   <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/style.css?v=42" />
+  <link rel="stylesheet" href="css/style.css?v=43" />
 </head>
 
 <body>
@@ -177,6 +177,18 @@
         <p class="hint">Evens out the engine's level and makes it denser. Overrun bangs skip
         it, so with more compression they jump out of the mix even harder.</p>
       </div>
+      <div class="setting-row" id="row-spatial">
+        <label for="set-spatial">3D sound <span class="tag-exp">EXPERIMENTAL</span></label>
+        <select id="set-spatial">
+          <option value="off">Off</option>
+          <option value="hrtf">Headphones (binaural)</option>
+          <option value="speakers">Speakers (stereo)</option>
+        </select>
+        <p class="hint">Places every sound where it comes from: the exhaust and its
+        bangs at the tail, the engine, intake and turbo where the engine sits (front,
+        mid or rear — per preset). Bass stays centred. Binaural gives front/back and
+        height on headphones; on speakers only left/right is reproduced.</p>
+      </div>
       <div class="setting-row" id="row-startsound">
         <label for="set-startsound">Start sound</label>
         <select id="set-startsound">
@@ -272,14 +284,14 @@
     </div>
   </div>
 
-  <script src="js/engine.js?v=42"></script>
-  <script src="js/sound.js?v=42"></script>
-  <script src="js/samples.js?v=42"></script>
-  <script src="js/physical-params.js?v=42"></script>
-  <script src="js/engine-presets.js?v=42"></script>
-  <script src="js/physical.js?v=42"></script>
-  <script src="js/dashboard.js?v=42"></script>
-  <script src="js/main.js?v=42"></script>
+  <script src="js/engine.js?v=43"></script>
+  <script src="js/sound.js?v=43"></script>
+  <script src="js/samples.js?v=43"></script>
+  <script src="js/physical-params.js?v=43"></script>
+  <script src="js/engine-presets.js?v=43"></script>
+  <script src="js/physical.js?v=43"></script>
+  <script src="js/dashboard.js?v=43"></script>
+  <script src="js/main.js?v=43"></script>
 </body>
 
 </html>

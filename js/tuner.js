@@ -43,6 +43,8 @@
     sp.max = String(Math.round(engine.cfg.maxSpeed));
     const st = Presets.readSettings();
     sound.setCompression((st.compressor ?? 50) / 100);
+    sound.setSpatial(st.spatial || 'off');
+    $('bench-spatial').value = sound.spatialMode;
     const lis = PP.listener(st.listener || 'cabin').id;
     sound.setListener(lis);
     $('bench-listener').value = lis;
@@ -187,6 +189,10 @@
   lisSel.addEventListener('change', () => {
     sound.setListener(lisSel.value);
     Presets.patchSettings({ listener: lisSel.value });
+  });
+  $('bench-spatial').addEventListener('change', (e) => {
+    sound.setSpatial(e.target.value);
+    Presets.patchSettings({ spatial: e.target.value });
   });
 
   // Simulator settings changed in another tab: follow them

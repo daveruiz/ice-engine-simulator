@@ -63,6 +63,14 @@ window.PhysicalParams = (function () {
     { key: 'phaseJitter', group: 'engine', label: 'Combustion timing jitter', unit: '°',
       min: 0, max: 6, step: 0.1, def: 2.5,
       info: 'Cycle-to-cycle scatter of when (and how fast) each combustion happens, in crank degrees. Breaks the perfectly periodic pulse train that sounds synthetic.' },
+    { key: 'layout', group: 'engine', label: 'Engine position', type: 'select',
+      def: 'front',
+      options: [
+        ['front', 'Front (under the bonnet)'],
+        ['mid', 'Mid (behind the seats)'],
+        ['rear', 'Rear (behind the rear axle)'],
+      ],
+      info: 'Where the engine sits in the car. Only used by 3D sound (Settings): it places the engine, intake and turbo around the listener; the exhaust and its bangs are always at the tail.' },
     { key: 'idleWobble', group: 'engine', label: 'Idle RPM wobble',
       min: 0, max: 0.06, step: 0.002, def: 0.02,
       info: 'Slow random crank-speed wobble at idle (dies out with revs/load).' },
@@ -499,9 +507,68 @@ window.PhysicalParams = (function () {
     catch (e) { /* ignore */ }
   }
 
+  /**
+   * 3D sound geometry (experimental, Settings → 3D sound). Car frame, in
+   * metres: x to the right, y up (0 = a seated driver's ear height), z to
+   * the rear (the car faces −z). Emitters per engine layout; the exhaust
+   * and its bangs come out of the tail whatever the layout.
+   */
+  const SPATIAL_EMITTERS = {
+    front: {
+      block:   [0.0, -0.45, -1.7],
+      intake:  [0.25, -0.25, -1.95],
+      turbo:   [0.4, -0.5, -1.5],
+    },
+    mid: {
+      block:   [0.0, -0.5, 1.15],
+      intake:  [0.0, 0.05, 0.85],   // plenum / airbox right behind the head
+      turbo:   [0.35, -0.4, 1.5],
+    },
+    rear: {
+      block:   [0.0, -0.5, 1.9],
+      intake:  [0.0, -0.15, 1.65],
+      turbo:   [0.35, -0.4, 2.0],
+    },
+    tail: {
+      exhaust: [0.3, -0.8, 2.25],   // rear silencer / tailpipes
+      bangs:   [0.35, -0.8, 2.35],
+    },
+  };
+  // Listener pose per listening position: where the head is (car frame)
+  // and which way it faces. Cabin/original: the driver's seat (left-hand
+  // drive). Outside: a few metres off the car's left flank, facing it.
+  const SPATIAL_POSES = {
+    original: { pos: [-0.37, 0, 0], fwd: [0, 0, -1] },
+    cabin:    { pos: [-0.37, 0, 0], fwd: [0, 0, -1] },
+    outside:  { pos: [-4.5, 0.4, 0.4], fwd: [1, 0, 0] },
+  };
+  // Below this the stems stay unpanned (bass is hard to localize anyway,
+  // and keeping it centred keeps the low end solid)
+  const SPATIAL_CROSSOVER = 130;
+
+  /** Emitter positions for layout `layout`, seen from position `lisId`:
+   *  { block, intake, turbo, exhaust, bangs } in listener coordinates
+   *  (Web Audio's: x right, y up, −z ahead). */
+  function spatialPositions(layout, lisId) {
+    const E = Object.assign({}, SPATIAL_EMITTERS[layout] || SPATIAL_EMITTERS.front,
+      SPATIAL_EMITTERS.tail);
+    const pose = SPATIAL_POSES[lisId] || SPATIAL_POSES.cabin;
+    const f = pose.fwd, up = [0, 1, 0];
+    const r = [f[1] * up[2] - f[2] * up[1], f[2] * up[0] - f[0] * up[2],
+      f[0] * up[1] - f[1] * up[0]]; // forward × up
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const out = {};
+    for (const k of Object.keys(E)) {
+      const d = [E[k][0] - pose.pos[0], E[k][1] - pose.pos[1], E[k][2] - pose.pos[2]];
+      out[k] = [dot(d, r), dot(d, up), -dot(d, f)];
+    }
+    return out;
+  }
+
   return {
     STORAGE_KEY, GROUPS, SCHEMA, LISTENERS, LISTENER_KEY, SPACE_FIELDS,
     defaults, load, save, listener, applyListener,
     loadListeners, saveListener, resetListener, listenerDefaults,
+    spatialPositions, SPATIAL_CROSSOVER,
   };
 })();

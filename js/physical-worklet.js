@@ -35,6 +35,12 @@
  *
  *   mix ──> tanh soft clip (drive) ──> master lowpass ──> DC blocker
  *
+ *   3D sound (experimental, message {type:'spatial', on}): the sources are
+ *   not summed; outputs 2..5 carry the engine block (mech + chain +
+ *   starter), intake, turbo and exhaust stems, each through its own drive
+ *   / lowpass / DC blocker, and output 0 only the body vibration (which
+ *   has no direction). physical.js places each stem with a PannerNode.
+ *
  *   Realism (no two cycles alike): each cylinder has a fixed strength /
  *   timing offset (cylImbalance → the half orders a real engine has), every
  *   combustion is jittered in timing and duration (phaseJitter), and the
@@ -267,6 +273,14 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     // popping endlessly on a long coast.
     this.popHeat = 0;
     this.mLp = 0; this.dcX = 0; this.dcY = 0;
+    // 3D sound (experimental): instead of the mono mix, output 0 carries
+    // the unpositioned part (body vibration) and outputs 2..5 one stem per
+    // emitter — engine block, intake, turbo, exhaust — each with its own
+    // drive/lowpass/DC-block state, for the main thread to place in space.
+    this.spatial = false;
+    this.stLp = new Float32Array(5);
+    this.stDcX = new Float32Array(5);
+    this.stDcY = new Float32Array(5);
     this.vib1 = 0; this.vib2 = 0; this.vibHp = 0;
     // per-source transmission-path lowpass states
     this.tEx = 0; this.tIn = 0; this.tMe = 0; this.tCh = 0; this.tSt = 0; this.tBa = 0;
@@ -302,6 +316,8 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
       } else if (m.type === 'mix') {
         for (let k = 0; k < NSRC; k++) this.mixG[k] = m.gains[k] === undefined ? 1 : m.gains[k];
         this.metersOn = !!m.meters;
+      } else if (m.type === 'spatial') {
+        this.spatial = !!m.on;
       } else if (m.type === 'params') {
         this.P = m.params;
         this._applyParams();
@@ -390,9 +406,25 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.bpGrind.set(900, 0.9, sr);
   }
 
+  /** One spatial stem through the output stage (drive → LP → DC block). */
+  _stem(k, x) {
+    const P = this.P;
+    x = Math.tanh(x * P.drive) * this.driveNorm;
+    const lp = (this.stLp[k] += (x - this.stLp[k]) * this.masterK);
+    const y = lp - this.stDcX[k] + 0.995 * this.stDcY[k];
+    this.stDcX[k] = lp;
+    this.stDcY[k] = y;
+    return y * P.masterGain * 0.7;
+  }
+
   process(inputs, outputs) {
     const out = outputs[0][0];
     const bangOut = outputs[1] ? outputs[1][0] : null;
+    const stems = this.spatial && outputs.length >= 6;
+    const oBlock = stems ? outputs[2][0] : null;
+    const oIntake = stems ? outputs[3][0] : null;
+    const oTurbo = stems ? outputs[4][0] : null;
+    const oExh = stems ? outputs[5][0] : null;
     const P = this.P, sr = this.sr, N = this.N;
     const w = P.fireWidth, wIn = 0.28;
     const TWO_PI = 2 * Math.PI;
@@ -695,14 +727,22 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
         a[8] += vib * vib;
       }
       const g = this.mixG;
-      let sum = exT * g[0] + inT * g[1] + meT * g[2] + chT * g[3] + whT * g[4] +
-        hsT * g[5] + boT * g[6] + stT * g[7] + vib * g[8];
-      sum = Math.tanh(sum * P.drive) * this.driveNorm;
-      this.mLp += (sum - this.mLp) * this.masterK;
-      const y = this.mLp - this.dcX + 0.995 * this.dcY;
-      this.dcX = this.mLp;
-      this.dcY = y;
-      out[i] = y * P.masterGain * 0.7;
+      if (stems) {
+        oBlock[i] = this._stem(0, meT * g[2] + chT * g[3] + stT * g[7]);
+        oIntake[i] = this._stem(1, inT * g[1]);
+        oTurbo[i] = this._stem(2, whT * g[4] + hsT * g[5] + boT * g[6]);
+        oExh[i] = this._stem(3, exT * g[0]);
+        out[i] = this._stem(4, vib * g[8]);
+      } else {
+        let sum = exT * g[0] + inT * g[1] + meT * g[2] + chT * g[3] + whT * g[4] +
+          hsT * g[5] + boT * g[6] + stT * g[7] + vib * g[8];
+        sum = Math.tanh(sum * P.drive) * this.driveNorm;
+        this.mLp += (sum - this.mLp) * this.masterK;
+        const y = this.mLp - this.dcX + 0.995 * this.dcY;
+        this.dcX = this.mLp;
+        this.dcY = y;
+        out[i] = y * P.masterGain * 0.7;
+      }
       if (this.metersOn && ++this.meterN >= 4000) {
         const rms = new Array(NSRC);
         for (let k = 0; k < NSRC; k++) {
