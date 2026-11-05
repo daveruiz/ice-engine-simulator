@@ -250,6 +250,7 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     this.bpRes2 = new Bandpass();
     this.bpChain = new Bandpass();
     this.bpBlow = new Bandpass();
+    this.bpWhine = new Bandpass();
     this.spool = 0; this.turboPh = 0; this.boEnv = 0; this.hissLp = 0;
     this.samplesSincePop = 1e9;
     // "Pop heat": hot exhaust + unburnt fuel built up by pulling hard. It
@@ -381,6 +382,11 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
     const intakeNorm = 2 / Math.max(2, N);
 
     // Blow-off filter follows its (block-rate) envelope down in pitch
+    // Blown (noisy) part of the turbo whistle tracks the blade-pass pitch
+    if (P.turbo && (P.whineNoise || 0) > 0) {
+      const fw = P.whineMin + (P.whineMax - P.whineMin) * this.spool;
+      this.bpWhine.set(fw, 3.5, sr);
+    }
     if (P.turbo && this.boEnv > 0.005) {
       this.bpBlow.set(700 + 2600 * this.boEnv, 1.5, sr);
     }
@@ -555,8 +561,13 @@ class PhysicalEngineProcessor extends AudioWorkletProcessor {
           (1 + 0.006 * this.whFm.tick());
         this.turboPh += f / sr;
         if (this.turboPh >= 1) this.turboPh -= 1;
-        const whine = (Math.sin(TWO_PI * this.turboPh) * 0.75 +
-          Math.sin(2 * TWO_PI * this.turboPh + 0.9) * 0.35) *
+        // pure blade-pass tone, blended with narrowband "blown" noise at the
+        // same pitch (whineNoise): heard through ducts it isn't a clean tone
+        const wn = P.whineNoise || 0;
+        const tone = Math.sin(TWO_PI * this.turboPh) * 0.75 +
+          Math.sin(2 * TWO_PI * this.turboPh + 0.9) * 0.35;
+        const blown = wn > 0 ? this.bpWhine.tick(white) * 3.2 : 0;
+        const whine = (tone * (1 - wn) + blown * wn) *
           s2 * P.whineGain * 0.5 * (0.8 + 0.2 * this.whAm.tick());
         this.hissLp += (white - this.hissLp) * this.hissK;
         const hiss = (white - this.hissLp) * s2 * P.hissGain * 0.6;

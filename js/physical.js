@@ -66,7 +66,7 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=23');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=24');
     this.ctx = ctx;
 
     // Output 0: the engine. Output 1: overrun tailpipe bangs.
