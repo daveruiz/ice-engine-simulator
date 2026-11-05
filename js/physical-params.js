@@ -327,9 +327,9 @@ window.PhysicalParams = (function () {
         exhaustTone: { set: 4500 },
         fireNoise: { mul: 0.8 },
         // Intake through the firewall: a roar under load more than a hiss
-        intakeGain: { mul: 0.7 },
+        intakeGain: { mul: 0.35 },
         intakeColor: { mul: 0.65 },
-        intakeTone: { set: 2200 },
+        intakeTone: { set: 1200 },
         // Engine bay mechanics: bonnet + firewall block them (dull, quiet)
         mechGain: { mul: 0.3 },
         res2Gain: { mul: 0.35 },        // valvetrain clatter goes first
