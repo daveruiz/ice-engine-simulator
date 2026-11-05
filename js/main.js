@@ -42,7 +42,8 @@
     soundSet: "physical", // 'synth' | 'physical' | a pack id | 'auto'
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
     listener: "cabin", // physical model listening position: original|cabin|outside
-    rev: 5, // settings revision (one-off migrations in loadSettings)
+    spatial: "off", // physical model 3D sound (experimental): off|hrtf|speakers
+    rev: 6, // settings revision (one-off migrations in loadSettings)
   };
 
   let settings = loadSettings();
@@ -113,12 +114,12 @@
           s.rev = 2;
         }
         // rev 3 (texture/bang params), 4 (engine vibration), 5 (pop burst
-        // length): presets gained parameters. A sound still on its preset
-        // (every saved value matches) picks the new values up instead of
-        // reading as "modified".
-        if (!(stored.rev >= 5)) {
+        // length), 6 (engine position, for 3D sound): presets gained
+        // parameters. A sound still on its preset (every saved value
+        // matches) picks the new values up instead of reading as "modified".
+        if (!(stored.rev >= 6)) {
           migratePresetParams(s.preset);
-          s.rev = 5;
+          s.rev = 6;
         }
         return s;
       }
@@ -196,6 +197,7 @@
     sound.setVolume(settings.volume / 100);
     physicalSound.setListener(settings.listener);
     physicalSound.setCompression(settings.compressor / 100);
+    physicalSound.setSpatial(settings.spatial);
     // The synthesized starter's reference level is the 150% default
     physicalSound.setStarterLevel(settings.startVolume / 150);
     setSource(settings.source);
@@ -275,6 +277,7 @@
     $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-compressor").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("row-spatial").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
@@ -667,6 +670,7 @@
     $("set-source").value = settings.source;
     $("set-units").value = settings.units;
     $("set-startsound").value = settings.startSound;
+    $("set-spatial").value = settings.spatial;
     populateSoundSelect();
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
@@ -698,6 +702,10 @@
     }
     $("set-source").addEventListener("change", (e) => {
       settings.source = e.target.value;
+      applySettings();
+    });
+    $("set-spatial").addEventListener("change", (e) => {
+      settings.spatial = e.target.value;
       applySettings();
     });
     $("set-startsound").addEventListener("change", (e) => {

@@ -17,12 +17,27 @@
  * (setListener: original / cabin / outside — see PhysicalParams.LISTENERS):
  * relative parameter modifiers plus an acoustic-space stage (transmission
  * lowpass, cabin boom, generated impulse response) after the FX bus.
+ *
+ * 3D sound (experimental, setSpatial): the worklet hands over one stem
+ * per emitter instead of the mono mix, and each stem is placed around the
+ * listener with a PannerNode (HRTF for headphones, equal-power for
+ * speakers) — engine block / intake / turbo where the engine sits
+ * (front, mid or rear: the `layout` param), the exhaust and its bangs at
+ * the tail. Below SPATIAL_CROSSOVER the stems are summed unpanned
+ * (Linkwitz–Riley split, so the bands add back flat): bass carries
+ * little direction and stays solid. The stereo result then runs through
+ * the same FX bus / compressor / acoustic space as the mono mix.
  */
 // Make-up gain (dB) per compression amount 0, .25, .5, .75, 1 — measured
 // with dev/render-presets.js so the engine's loudness barely moves with the
 // slider (it gets ~1 dB denser at full). Not monotonic because the native
 // compressor applies its own partial auto make-up.
 const MAKEUP_DB = [0.9, -1.3, -1.65, 0.4, 3.15];
+// 3D sound: make-up on the panned (above-crossover) part, so a source
+// straight ahead keeps the mono mix's level — equal-power panning is −3 dB
+// per channel at the centre; HRTF measured with dev/render-presets.js
+// --spatial
+const SPATIAL_MAKEUP = { hrtf: 1.06, speakers: Math.SQRT2 };
 
 class PhysicalEngineSound {
   constructor() {
@@ -35,6 +50,8 @@ class PhysicalEngineSound {
     this.listener = 'original';
     this.starterLevel = 1;
     this.compression = 0.5; // mix compressor amount 0..1 (Settings)
+    this.spatialMode = 'off'; // 3D sound: 'off' | 'hrtf' | 'speakers'
+    this.sp = null;           // its nodes, built on first use
     this.baseParams = window.PhysicalParams.load();
     this.params = this._effective();
     window.addEventListener('storage', (e) => {
@@ -92,16 +109,19 @@ class PhysicalEngineSound {
       throw new Error('AudioWorklet not supported by this browser');
     }
     if (this._ownsCtx) await ctx.resume();
-    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=25');
+    await ctx.audioWorklet.addModule('js/physical-worklet.js?v=26');
     this.ctx = ctx;
 
-    // Output 0: the engine. Output 1: overrun tailpipe bangs.
+    // Output 0: the engine. Output 1: overrun tailpipe bangs. Outputs
+    // 2..5: per-emitter stems for 3D sound (silent unless it's on).
     this.node = new AudioWorkletNode(ctx, 'physical-engine', {
       numberOfInputs: 0,
-      numberOfOutputs: 2,
-      outputChannelCount: [1, 1],
+      numberOfOutputs: 6,
+      outputChannelCount: [1, 1, 1, 1, 1, 1],
       processorOptions: { params: this.params },
     });
+    this.mixIn = ctx.createGain();
+    this.node.connect(this.mixIn, 0, 0);
 
     this.master = ctx.createGain();
     this.master.gain.value = 0;
@@ -112,7 +132,7 @@ class PhysicalEngineSound {
     this.busComp.connect(this.busMakeup);
     this.fxOut = ctx.createGain();
     this.busMakeup.connect(this.fxOut);
-    this._buildFx(ctx, this.node, this.busComp);
+    this._buildFx(ctx, this.mixIn, this.busComp);
     // Bang layer: driven hard into saturation, then straight into the
     // acoustic space (so cabin/outside still filter it) — past the bus
     // compressor, so it punches out of the mix
@@ -125,7 +145,9 @@ class PhysicalEngineSound {
     this.bangLp.type = 'lowpass';
     this.bangLp.Q.value = 0.6;
     this.bangShaper.connect(this.bangLp);
-    this.bangLp.connect(this.fxOut);
+    this.bangDry = ctx.createGain();
+    this.bangLp.connect(this.bangDry);
+    this.bangDry.connect(this.fxOut);
     this._bangDrive = 0;
     this._buildSpace(ctx, this.fxOut, this.master);
     // Final safety limiter: only catches peaks (bangs, flares)
@@ -143,6 +165,8 @@ class PhysicalEngineSound {
       if (e.data.type === 'meters' && this.onMeters) this.onMeters(e.data.rms);
     };
     if (this.mixGains || this.metersOn) this.setMix(this.mixGains, this.metersOn);
+    this.sp = null;
+    this._applySpatial(true);
     // Master is left silent; main.js fades it in (see fadeIn) so the
     // starter clip can crank first and the engine swell in as it catches.
     this.running = true;
@@ -355,6 +379,111 @@ class PhysicalEngineSound {
     return buf;
   }
 
+  /** 3D sound: 'off' | 'hrtf' (headphones) | 'speakers'. Live. */
+  setSpatial(mode) {
+    mode = mode === 'hrtf' || mode === 'speakers' ? mode : 'off';
+    if (mode === this.spatialMode) return;
+    this.spatialMode = mode;
+    this._applySpatial(false);
+  }
+
+  /**
+   *   stem k ──> LR4 highpass ──> panner k ──> Σ ──> ×makeup ──┐
+   *        └──> Σ ──> LR4 lowpass (unpanned) ─────────────────┴─> FX bus …
+   *   bangs (after their shaper/LP) ──> panner ──> (past the compressor)
+   */
+  _buildSpatial(ctx) {
+    const xo = window.PhysicalParams.SPATIAL_CROSSOVER;
+    const biq = (type) => {
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = xo;
+      f.Q.value = Math.SQRT1_2;
+      return f;
+    };
+    const panner = () => {
+      const p = ctx.createPanner();
+      p.distanceModel = 'inverse';
+      p.refDistance = 1;
+      p.rolloffFactor = 0; // direction only: the mix balance stays as tuned
+      p.maxDistance = 10000;
+      return p;
+    };
+    const sp = { stems: [], connected: false };
+    sp.sum = ctx.createGain();
+    sp.sum.gain.value = 0;
+    sp.sum.connect(this.eqBass);
+    sp.low = ctx.createGain();
+    const lp1 = biq('lowpass'), lp2 = biq('lowpass');
+    sp.lowOut = ctx.createGain();
+    sp.lowOut.gain.value = 0;
+    sp.low.connect(lp1); lp1.connect(lp2); lp2.connect(sp.lowOut);
+    sp.lowOut.connect(this.eqBass); // mono, i.e. dead centre at full level
+    for (const id of ['block', 'intake', 'turbo', 'exhaust']) {
+      const hp1 = biq('highpass'), hp2 = biq('highpass'), pan = panner();
+      hp1.connect(hp2); hp2.connect(pan); pan.connect(sp.sum);
+      sp.stems.push({ id, hp1, pan });
+    }
+    sp.bangPan = panner();
+    sp.bangOut = ctx.createGain();
+    sp.bangOut.gain.value = 0;
+    sp.bangPan.connect(sp.bangOut);
+    sp.bangOut.connect(this.fxOut);
+    this.sp = sp;
+  }
+
+  _applySpatial(instant) {
+    if (!this.ctx || !this.node) return;
+    const on = this.spatialMode !== 'off';
+    if (on && !this.sp) this._buildSpatial(this.ctx);
+    const sp = this.sp;
+    const t = this.ctx.currentTime, S = instant ? 0.001 : 0.03;
+    this.node.port.postMessage({ type: 'spatial', on });
+    if (!sp) return;
+    if (on && !sp.connected) {
+      sp.stems.forEach((st, k) => {
+        this.node.connect(st.hp1, k + 2, 0);
+        this.node.connect(sp.low, k + 2, 0);
+      });
+      this.bangLp.connect(sp.bangPan);
+      sp.connected = true;
+    } else if (!on && sp.connected) {
+      for (let k = 2; k < 6; k++) this.node.disconnect(k);
+      try { this.bangLp.disconnect(sp.bangPan); } catch (e) { /* gone */ }
+      sp.connected = false;
+    }
+    const model = this.spatialMode === 'hrtf' ? 'HRTF' : 'equalpower';
+    for (const st of sp.stems) st.pan.panningModel = model;
+    sp.bangPan.panningModel = model;
+    // (output 0 keeps feeding the FX bus: with 3D on it only carries the
+    // body vibration, which has no direction)
+    const mk = on ? SPATIAL_MAKEUP[this.spatialMode] : 1;
+    sp.lowOut.gain.setTargetAtTime(on ? 1 : 0, t, S);
+    sp.sum.gain.setTargetAtTime(on ? mk : 0, t, S);
+    sp.bangOut.gain.setTargetAtTime(on ? mk : 0, t, S);
+    this.bangDry.gain.setTargetAtTime(on ? 0 : 1, t, S);
+    this._placeSpatial(true);
+  }
+
+  /** Move the emitters for the current engine layout / listening position. */
+  _placeSpatial(instant) {
+    const sp = this.sp;
+    if (!sp || !this.ctx) return;
+    const pos = window.PhysicalParams.spatialPositions(this.params.layout, this.listener);
+    const t = this.ctx.currentTime, S = instant ? 0.001 : 0.12;
+    const place = (pan, p) => {
+      if (pan.positionX) {
+        pan.positionX.setTargetAtTime(p[0], t, S);
+        pan.positionY.setTargetAtTime(p[1], t, S);
+        pan.positionZ.setTargetAtTime(p[2], t, S);
+      } else {
+        pan.setPosition(p[0], p[1], p[2]);
+      }
+    };
+    for (const st of sp.stems) place(st.pan, pos[st.id]);
+    place(sp.bangPan, pos.bangs);
+  }
+
   /** tanh saturation curve normalized to ±1 at full scale. */
   static _satCurve(drive) {
     const n = 1024;
@@ -379,6 +508,7 @@ class PhysicalEngineSound {
     this.ctx = null;
     this.node = null;
     this.spLp = null;
+    this.sp = null;
   }
 
   /**
@@ -428,6 +558,7 @@ class PhysicalEngineSound {
     if (this.node) {
       this.node.port.postMessage({ type: 'params', params: this.params });
       this._applyFx();
+      this._placeSpatial(false);
     }
   }
 

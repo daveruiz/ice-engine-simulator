@@ -71,7 +71,13 @@ node render-presets.js --scenario start                     # key-on â†’ crank â
 node render-presets.js --scenario coast                     # hard pull, then 6 s overrun (pop density)
 node render-presets.js --preset golf-gti --set exhaustFb=0,turbo=0 --tag test  # overrides
 node render-presets.js --comp 1                             # mix compressor amount 0..1
+node render-presets.js --spatial hrtf                       # 3D sound: hrtf | speakers
 ```
+
+`SPATIAL_MAKEUP` in `js/physical.js` (the 3D sound's level match) was
+measured the same way: `drive` renders with `--spatial off / hrtf /
+speakers` should stay within ~1 dB (the RMS column is per-channel power,
+so stereo and mono compare fairly).
 
 The compressor's make-up table in `js/physical.js` (`MAKEUP_DB`) was
 calibrated with the `sweep` scenario at amounts 0, .25, .5, .75 and 1 so
