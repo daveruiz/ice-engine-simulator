@@ -43,6 +43,7 @@
     preset: Presets.DEFAULT_ID, // last engine preset picked (js/engine-presets.js)
     listener: "cabin", // physical model listening position: original|cabin|outside
     spatial: "off", // physical model 3D sound (experimental): off|hrtf|speakers
+    spatialMode: "hrtf", // what the top-bar 3D toggle turns on (last mode used)
     rev: 6, // settings revision (one-off migrations in loadSettings)
   };
 
@@ -198,6 +199,8 @@
     physicalSound.setListener(settings.listener);
     physicalSound.setCompression(settings.compressor / 100);
     physicalSound.setSpatial(settings.spatial);
+    if (settings.spatial !== "off") settings.spatialMode = settings.spatial;
+    updateSpatialUI();
     // The synthesized starter's reference level is the 150% default
     physicalSound.setStarterLevel(settings.startVolume / 150);
     setSource(settings.source);
@@ -255,6 +258,16 @@
     saveSettings();
   }
 
+  function updateSpatialUI() {
+    const on = settings.spatial !== "off";
+    const b = $("top-3d");
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+    const mode = on ? settings.spatial : settings.spatialMode;
+    b.title = "3D sound (experimental): " + (on ? "on" : "off") + " · " +
+      (mode === "speakers" ? "speakers" : "headphones") + " (change in Settings)";
+  }
+
   function updateListenerUI() {
     const L = PP.listener(settings.listener);
     document.querySelectorAll("#listener-seg .seg-btn, #top-listener .seg-btn").forEach((b) => {
@@ -279,6 +292,7 @@
     $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-compressor").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-spatial").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("top-3d").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-speedsmooth").classList.toggle("hidden", settings.source !== "gps");
   }
 
@@ -672,6 +686,7 @@
     $("set-units").value = settings.units;
     $("set-startsound").value = settings.startSound;
     $("set-spatial").value = settings.spatial;
+    updateSpatialUI();
     populateSoundSelect();
     for (const [inputId, outId, key, fmt] of bindings) {
       $(inputId).value = settings[key];
@@ -703,6 +718,12 @@
     }
     $("set-source").addEventListener("change", (e) => {
       settings.source = e.target.value;
+      applySettings();
+    });
+    $("top-3d").addEventListener("click", (e) => {
+      settings.spatial = settings.spatial === "off" ? settings.spatialMode : "off";
+      $("set-spatial").value = settings.spatial;
+      e.currentTarget.blur();
       applySettings();
     });
     $("set-spatial").addEventListener("change", (e) => {

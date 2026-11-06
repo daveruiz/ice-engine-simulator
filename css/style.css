@@ -265,6 +265,13 @@ a { color: var(--accent-2); text-decoration-color: rgba(47, 208, 255, 0.4); text
 #top-listener .seg-btn:first-child { border-radius: var(--r-sm) 0 0 var(--r-sm); }
 #top-listener .seg-btn:last-child { border-radius: 0 var(--r-sm) var(--r-sm) 0; margin-left: -1px; }
 #top-listener .seg-btn.active { position: relative; z-index: 1; }
+#top-3d {
+  flex: 0 0 auto;
+  min-height: 42px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+  letter-spacing: 0.14em;
+}
 
 /* ---------- Dashboard ---------- */
 #dashboard {
@@ -914,7 +921,7 @@ body.tuner-page {
   #top-bar { padding-top: 4px; gap: 8px; }
   #top-preset { min-height: 32px; font-size: 0.95rem; }
   #btn-preset-restore { width: 32px; height: 32px; font-size: 1rem; }
-  #top-listener .seg-btn { min-height: 32px; }
+  #top-listener .seg-btn, #top-3d { min-height: 32px; }
   #dashboard { padding-top: 4px; }
   #center-stack { gap: 6px; }
   #gear-display { padding: 4px 10px 4px; }
@@ -930,10 +937,11 @@ body.tuner-page {
 }
 @media (max-width: 520px) {
   #top-listener .wide-only { display: none; }  /* IN / OUT */
-  #top-listener .seg-btn { padding: 0 10px; }
+  #top-listener .seg-btn, #top-3d { padding: 0 10px; }
 }
-@media (max-width: 380px) {
-  #top-bar label { display: none; }
+@media (max-width: 480px) {
+  #top-bar { gap: 8px; }
+  #top-bar label { display: none; }  /* the picker needs the room */
 }
 @media (max-width: 480px) {
   #bench-row { flex-wrap: wrap; gap: 12px; }
