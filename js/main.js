@@ -257,7 +257,7 @@
 
   function updateListenerUI() {
     const L = PP.listener(settings.listener);
-    document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
+    document.querySelectorAll("#listener-seg .seg-btn, #top-listener .seg-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.listener === L.id);
     });
     $("listener-hint").textContent =
@@ -275,6 +275,7 @@
     $("row-tuner").classList.toggle("hidden", settings.soundSet !== "physical");
     // Listening positions are part of the physical model
     $("row-listener").classList.toggle("hidden", settings.soundSet !== "physical");
+    $("top-listener").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-startsound").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-compressor").classList.toggle("hidden", settings.soundSet !== "physical");
     $("row-spatial").classList.toggle("hidden", settings.soundSet !== "physical");
@@ -728,7 +729,7 @@
     $("btn-preset-restore").addEventListener("click", () =>
       applyPreset(settings.preset),
     );
-    document.querySelectorAll("#listener-seg .seg-btn").forEach((b) => {
+    document.querySelectorAll("#listener-seg .seg-btn, #top-listener .seg-btn").forEach((b) => {
       b.addEventListener("click", () => setListener(b.dataset.listener));
     });
     $("btn-reset-defaults").addEventListener("click", () => {
